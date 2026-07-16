@@ -28,6 +28,13 @@ object VersionManager {
     private const val STORAGE_PATCH =
         "PATCH"
 
+    /**
+     * Creates a new version for a saved document.
+     *
+     * The first version is stored as a complete base file.
+     * Every later version is stored as a patch relative to
+     * the immediately previous version.
+     */
     fun createVersion(
         context: Context,
         fileName: String,
@@ -36,84 +43,88 @@ object VersionManager {
     ): Version? {
 
         return try {
-            val folder =
+            val versionFolder =
                 getVersionFolder(
-                    context,
-                    fileName
+                    context = context,
+                    fileName = fileName
                 )
 
-            val currentVersions =
+            val existingVersions =
                 getVersions(
-                    context,
-                    fileName
+                    context = context,
+                    fileName = fileName
                 )
 
-            val nextNumber =
+            val nextVersionNumber =
                 (
-                        currentVersions
-                            .maxOfOrNull {
-                                it.versionNumber
-                            } ?: 0
+                        existingVersions.maxOfOrNull {
+                            it.versionNumber
+                        } ?: 0
                         ) + 1
 
-            val numberText =
-                nextNumber
+            val formattedNumber =
+                nextVersionNumber
                     .toString()
-                    .padStart(4, '0')
+                    .padStart(
+                        length = 4,
+                        padChar = '0'
+                    )
 
             val createdAt =
                 System.currentTimeMillis()
 
             val previousVersion =
-                currentVersions
-                    .maxByOrNull {
-                        it.versionNumber
-                    }
+                existingVersions.maxByOrNull {
+                    it.versionNumber
+                }
 
-            val isBase =
+            val isBaseVersion =
                 previousVersion == null
 
             val storageFileName =
-                if (isBase) {
-                    "version_$numberText$BASE_EXTENSION"
+                if (isBaseVersion) {
+                    "version_$formattedNumber$BASE_EXTENSION"
                 } else {
-                    "version_$numberText$PATCH_EXTENSION"
+                    "version_$formattedNumber$PATCH_EXTENSION"
                 }
 
             val storageFile =
                 File(
-                    folder,
+                    versionFolder,
                     storageFileName
                 )
 
-            if (isBase) {
+            if (isBaseVersion) {
                 storageFile.writeText(
-                    content,
-                    Charsets.UTF_8
+                    text = content,
+                    charset = Charsets.UTF_8
                 )
             } else {
                 val previousContent =
                     loadVersionContent(
-                        context,
-                        previousVersion
+                        context = context,
+                        version = previousVersion
                     ) ?: return null
 
-                val patch =
+                val patchText =
                     LineDiffManager.createPatch(
-                        previousContent,
-                        content
+                        oldText = previousContent,
+                        newText = content
                     )
 
                 storageFile.writeText(
-                    patch,
-                    Charsets.UTF_8
+                    text = patchText,
+                    charset = Charsets.UTF_8
                 )
             }
 
+            val metadataFileName =
+                "version_$formattedNumber$METADATA_EXTENSION"
+
             val metadataFile =
                 File(
-                    folder,
-                    "version_$numberText$METADATA_EXTENSION"
+                    versionFolder,
+                    metadataFileName
                 )
 
             val properties =
@@ -121,7 +132,7 @@ object VersionManager {
 
                     setProperty(
                         "version_number",
-                        nextNumber.toString()
+                        nextVersionNumber.toString()
                     )
 
                     setProperty(
@@ -141,7 +152,7 @@ object VersionManager {
 
                     setProperty(
                         "storage_type",
-                        if (isBase) {
+                        if (isBaseVersion) {
                             STORAGE_BASE
                         } else {
                             STORAGE_PATCH
@@ -164,17 +175,17 @@ object VersionManager {
 
             metadataFile
                 .outputStream()
-                .use { output ->
+                .use { outputStream ->
 
                     properties.store(
-                        output,
+                        outputStream,
                         "TextEZ version metadata"
                     )
                 }
 
             Version(
                 versionNumber =
-                    nextNumber,
+                    nextVersionNumber,
 
                 versionName =
                     versionName,
@@ -189,7 +200,7 @@ object VersionManager {
                     createdAt,
 
                 isBaseVersion =
-                    isBase,
+                    isBaseVersion,
 
                 previousVersionNumber =
                     previousVersion
@@ -201,32 +212,42 @@ object VersionManager {
         }
     }
 
+    /**
+     * Returns all versions for a document.
+     *
+     * The newest version appears first.
+     */
     fun getVersions(
         context: Context,
         fileName: String
     ): List<Version> {
 
         return try {
-            val folder =
+            val versionFolder =
                 getVersionFolder(
-                    context,
-                    fileName
+                    context = context,
+                    fileName = fileName
                 )
 
-            folder
+            versionFolder
                 .listFiles()
                 ?.filter { file ->
 
                     file.isFile &&
                             file.name.endsWith(
-                                METADATA_EXTENSION
+                                suffix = METADATA_EXTENSION,
+                                ignoreCase = true
                             )
                 }
-                ?.mapNotNull { file ->
-                    readVersionMetadata(file)
+                ?.mapNotNull { metadataFile ->
+
+                    readVersionMetadata(
+                        metadataFile
+                    )
                 }
-                ?.sortedByDescending {
-                    it.versionNumber
+                ?.sortedByDescending { version ->
+
+                    version.versionNumber
                 }
                 .orEmpty()
 
@@ -235,32 +256,39 @@ object VersionManager {
         }
     }
 
+    /**
+     * Reconstructs and returns the complete content of a
+     * selected version.
+     *
+     * It starts from the base file and applies patches in
+     * version-number order until the requested version is reached.
+     */
     fun loadVersionContent(
         context: Context,
         version: Version
     ): String? {
 
         return try {
-            val ascendingVersions =
+            val orderedVersions =
                 getVersions(
-                    context,
-                    version.fileName
-                ).sortedBy {
-                    it.versionNumber
+                    context = context,
+                    fileName = version.fileName
+                ).sortedBy { item ->
+
+                    item.versionNumber
                 }
 
-            var reconstructedContent:
-                    String? = null
+            var reconstructedContent: String? =
+                null
 
-            for (item in ascendingVersions) {
+            for (item in orderedVersions) {
 
                 if (item.isBaseVersion) {
-
                     val baseFile =
                         File(
                             getVersionFolder(
-                                context,
-                                item.fileName
+                                context = context,
+                                fileName = item.fileName
                             ),
                             item.storageFileName
                         )
@@ -271,7 +299,7 @@ object VersionManager {
 
                     reconstructedContent =
                         baseFile.readText(
-                            Charsets.UTF_8
+                            charset = Charsets.UTF_8
                         )
 
                 } else {
@@ -282,8 +310,8 @@ object VersionManager {
                     val patchFile =
                         File(
                             getVersionFolder(
-                                context,
-                                item.fileName
+                                context = context,
+                                fileName = item.fileName
                             ),
                             item.storageFileName
                         )
@@ -292,12 +320,15 @@ object VersionManager {
                         return null
                     }
 
+                    val patchText =
+                        patchFile.readText(
+                            charset = Charsets.UTF_8
+                        )
+
                     reconstructedContent =
                         LineDiffManager.applyPatch(
-                            previousContent,
-                            patchFile.readText(
-                                Charsets.UTF_8
-                            )
+                            oldText = previousContent,
+                            patchText = patchText
                         ) ?: return null
                 }
 
@@ -316,26 +347,32 @@ object VersionManager {
         }
     }
 
+    /**
+     * Reads the currently saved document from normal TextEZ storage.
+     */
     fun loadCurrentFileContent(
         context: Context,
         fileName: String
     ): String? {
 
         return try {
-            val file =
+            val documentFolder =
                 File(
-                    File(
-                        context.filesDir,
-                        DOCUMENTS_FOLDER
-                    ),
+                    context.filesDir,
+                    DOCUMENTS_FOLDER
+                )
+
+            val documentFile =
+                File(
+                    documentFolder,
                     fileName
                 )
 
-            if (!file.exists()) {
+            if (!documentFile.exists()) {
                 null
             } else {
-                file.readText(
-                    Charsets.UTF_8
+                documentFile.readText(
+                    charset = Charsets.UTF_8
                 )
             }
 
@@ -344,16 +381,22 @@ object VersionManager {
         }
     }
 
+    /**
+     * Restores the selected version into the normal document file.
+     *
+     * Before replacing the current file, TextEZ creates an
+     * automatic backup version when the content is different.
+     */
     fun rollbackToVersion(
         context: Context,
         version: Version
     ): Boolean {
 
         return try {
-            val versionContent =
+            val restoredContent =
                 loadVersionContent(
-                    context,
-                    version
+                    context = context,
+                    version = version
                 ) ?: return false
 
             val documentFolder =
@@ -375,34 +418,33 @@ object VersionManager {
             val currentContent =
                 if (currentFile.exists()) {
                     currentFile.readText(
-                        Charsets.UTF_8
+                        charset = Charsets.UTF_8
                     )
                 } else {
                     ""
                 }
 
-            /*
-             * Protect the current state by creating
-             * another version before rollback.
-             */
             if (
                 currentFile.exists() &&
-                currentContent != versionContent
+                currentContent != restoredContent
             ) {
-                createVersion(
-                    context = context,
-                    fileName =
-                        version.fileName,
-                    content =
-                        currentContent,
-                    versionName =
-                        "Automatic backup before rollback"
-                )
+                val backupVersion =
+                    createVersion(
+                        context = context,
+                        fileName = version.fileName,
+                        content = currentContent,
+                        versionName =
+                            "Automatic backup before rollback"
+                    )
+
+                if (backupVersion == null) {
+                    return false
+                }
             }
 
             currentFile.writeText(
-                versionContent,
-                Charsets.UTF_8
+                text = restoredContent,
+                charset = Charsets.UTF_8
             )
 
             true
@@ -412,6 +454,10 @@ object VersionManager {
         }
     }
 
+    /**
+     * Reads one .properties metadata file and converts it
+     * into a Version object.
+     */
     private fun readVersionMetadata(
         metadataFile: File
     ): Version? {
@@ -422,47 +468,70 @@ object VersionManager {
 
             metadataFile
                 .inputStream()
-                .use { input ->
+                .use { inputStream ->
 
-                    properties.load(input)
+                    properties.load(
+                        inputStream
+                    )
                 }
 
             val versionNumber =
-                properties.getProperty(
-                    "version_number"
-                )?.toIntOrNull()
+                properties
+                    .getProperty(
+                        "version_number"
+                    )
+                    ?.toIntOrNull()
                     ?: return null
 
             val versionName =
-                properties.getProperty(
-                    "version_name"
-                ).orEmpty()
+                properties
+                    .getProperty(
+                        "version_name"
+                    )
+                    .orEmpty()
 
             val fileName =
-                properties.getProperty(
-                    "file_name"
-                ).orEmpty()
+                properties
+                    .getProperty(
+                        "file_name"
+                    )
+                    .orEmpty()
 
             val storageFileName =
-                properties.getProperty(
-                    "storage_file"
-                ).orEmpty()
+                properties
+                    .getProperty(
+                        "storage_file"
+                    )
+                    .orEmpty()
 
             val storageType =
-                properties.getProperty(
-                    "storage_type"
-                ).orEmpty()
+                properties
+                    .getProperty(
+                        "storage_type"
+                    )
+                    .orEmpty()
 
             val createdAt =
-                properties.getProperty(
-                    "created_at"
-                )?.toLongOrNull()
+                properties
+                    .getProperty(
+                        "created_at"
+                    )
+                    ?.toLongOrNull()
                     ?: 0L
 
-            val previousVersion =
-                properties.getProperty(
-                    "previous_version"
-                )?.toIntOrNull()
+            val previousVersionNumber =
+                properties
+                    .getProperty(
+                        "previous_version"
+                    )
+                    ?.toIntOrNull()
+
+            if (
+                fileName.isBlank() ||
+                storageFileName.isBlank()
+            ) {
+                return null
+            }
 
             Version(
                 versionNumber =
@@ -484,7 +553,7 @@ object VersionManager {
                     storageType == STORAGE_BASE,
 
                 previousVersionNumber =
-                    previousVersion
+                    previousVersionNumber
             )
 
         } catch (exception: Exception) {
@@ -492,37 +561,43 @@ object VersionManager {
         }
     }
 
+    /**
+     * Creates and returns the version directory for one document.
+     */
     private fun getVersionFolder(
         context: Context,
         fileName: String
     ): File {
 
-        val rootFolder =
+        val versionsRootFolder =
             File(
                 context.filesDir,
                 VERSIONS_FOLDER
             )
 
-        if (!rootFolder.exists()) {
-            rootFolder.mkdirs()
+        if (!versionsRootFolder.exists()) {
+            versionsRootFolder.mkdirs()
         }
 
         val safeFolderName =
             fileName.replace(
-                Regex("""[\\/:*?"<>|.]"""),
-                "_"
+                regex =
+                    Regex(
+                        """[\\/:*?"<>|.]"""
+                    ),
+                replacement = "_"
             )
 
-        val fileFolder =
+        val documentVersionFolder =
             File(
-                rootFolder,
+                versionsRootFolder,
                 safeFolderName
             )
 
-        if (!fileFolder.exists()) {
-            fileFolder.mkdirs()
+        if (!documentVersionFolder.exists()) {
+            documentVersionFolder.mkdirs()
         }
 
-        return fileFolder
+        return documentVersionFolder
     }
 }

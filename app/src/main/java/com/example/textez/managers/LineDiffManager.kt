@@ -1,271 +1,149 @@
 package com.example.textez.managers
 
-import android.util.Base64
+import com.github.difflib.DiffUtils
+import com.github.difflib.UnifiedDiffUtils
+import com.github.difflib.text.DiffRow
+import com.github.difflib.text.DiffRowGenerator
 
 object LineDiffManager {
 
-    enum class DiffType {
-        UNCHANGED,
-        ADDED,
-        REMOVED
-    }
+    private const val ORIGINAL_FILE_NAME =
+        "previous-version.txt"
 
-    data class DiffLine(
-        val type: DiffType,
-        val text: String
-    )
+    private const val REVISED_FILE_NAME =
+        "new-version.txt"
 
-    private const val KEEP = "K"
-    private const val ADD = "A"
-    private const val DELETE = "D"
-    private const val SEPARATOR = "|"
-
-    fun calculateDiff(
-        oldText: String,
-        newText: String
-    ): List<DiffLine> {
-
-        val oldLines = toLines(oldText)
-        val newLines = toLines(newText)
-
-        val lcs = Array(oldLines.size + 1) {
-            IntArray(newLines.size + 1)
-        }
-
-        for (i in oldLines.indices.reversed()) {
-            for (j in newLines.indices.reversed()) {
-
-                lcs[i][j] =
-                    if (oldLines[i] == newLines[j]) {
-                        lcs[i + 1][j + 1] + 1
-                    } else {
-                        maxOf(
-                            lcs[i + 1][j],
-                            lcs[i][j + 1]
-                        )
-                    }
-            }
-        }
-
-        val result =
-            mutableListOf<DiffLine>()
-
-        var oldIndex = 0
-        var newIndex = 0
-
-        while (
-            oldIndex < oldLines.size ||
-            newIndex < newLines.size
-        ) {
-            when {
-                oldIndex < oldLines.size &&
-                        newIndex < newLines.size &&
-                        oldLines[oldIndex] ==
-                        newLines[newIndex] -> {
-
-                    result.add(
-                        DiffLine(
-                            DiffType.UNCHANGED,
-                            oldLines[oldIndex]
-                        )
-                    )
-
-                    oldIndex++
-                    newIndex++
-                }
-
-                newIndex < newLines.size &&
-                        (
-                                oldIndex >= oldLines.size ||
-                                        lcs[oldIndex][newIndex + 1] >=
-                                        lcs[oldIndex + 1][newIndex]
-                                ) -> {
-
-                    result.add(
-                        DiffLine(
-                            DiffType.ADDED,
-                            newLines[newIndex]
-                        )
-                    )
-
-                    newIndex++
-                }
-
-                oldIndex < oldLines.size -> {
-
-                    result.add(
-                        DiffLine(
-                            DiffType.REMOVED,
-                            oldLines[oldIndex]
-                        )
-                    )
-
-                    oldIndex++
-                }
-            }
-        }
-
-        return result
-    }
-
+    /*
+     * Creates a standard unified-diff patch.
+     *
+     * This patch is stored in the .patch file instead of
+     * storing another complete copy of the document.
+     */
     fun createPatch(
         oldText: String,
         newText: String
     ): String {
+        val originalLines =
+            textToLines(oldText)
 
-        return calculateDiff(
-            oldText,
-            newText
-        ).joinToString("\n") { line ->
+        val revisedLines =
+            textToLines(newText)
 
-            val operation =
-                when (line.type) {
-                    DiffType.UNCHANGED -> KEEP
-                    DiffType.ADDED -> ADD
-                    DiffType.REMOVED -> DELETE
-                }
+        val patch = DiffUtils.diff(
+            originalLines,
+            revisedLines
+        )
 
-            "$operation$SEPARATOR${encode(line.text)}"
-        }
+        val unifiedDiff =
+            UnifiedDiffUtils.generateUnifiedDiff(
+                ORIGINAL_FILE_NAME,
+                REVISED_FILE_NAME,
+                originalLines,
+                patch,
+                0
+            )
+
+        return unifiedDiff.joinToString("\n")
     }
 
+    /*
+     * Reconstructs the next version by applying the stored
+     * unified patch to the previous version.
+     */
     fun applyPatch(
         oldText: String,
         patchText: String
     ): String? {
-
-        val oldLines = toLines(oldText)
-
-        val outputLines =
-            mutableListOf<String>()
-
-        var oldIndex = 0
-
-        if (patchText.isBlank()) {
-            return oldText
-        }
-
-        for (patchLine in patchText.lineSequence()) {
-
-            val separatorIndex =
-                patchLine.indexOf(SEPARATOR)
-
-            if (separatorIndex <= 0) {
-                return null
+        return try {
+            if (patchText.isBlank()) {
+                return oldText
             }
 
-            val operation =
-                patchLine.substring(
-                    0,
-                    separatorIndex
+            val originalLines =
+                textToLines(oldText)
+
+            val unifiedDiffLines =
+                patchText.split("\n")
+
+            val patch =
+                UnifiedDiffUtils.parseUnifiedDiff(
+                    unifiedDiffLines
                 )
 
-            val encodedText =
-                patchLine.substring(
-                    separatorIndex + 1
+            val revisedLines =
+                DiffUtils.patch(
+                    originalLines,
+                    patch
                 )
 
-            val lineText = try {
-                decode(encodedText)
-            } catch (exception: Exception) {
-                return null
-            }
+            revisedLines.joinToString("\n")
 
-            when (operation) {
-                KEEP -> {
-                    if (
-                        oldIndex >= oldLines.size ||
-                        oldLines[oldIndex] != lineText
-                    ) {
-                        return null
-                    }
-
-                    outputLines.add(lineText)
-                    oldIndex++
-                }
-
-                DELETE -> {
-                    if (
-                        oldIndex >= oldLines.size ||
-                        oldLines[oldIndex] != lineText
-                    ) {
-                        return null
-                    }
-
-                    oldIndex++
-                }
-
-                ADD -> {
-                    outputLines.add(lineText)
-                }
-
-                else -> return null
-            }
+        } catch (exception: Exception) {
+            null
         }
-
-        if (oldIndex != oldLines.size) {
-            return null
-        }
-
-        return outputLines.joinToString("\n")
     }
 
+    /*
+     * Generates the readable comparison displayed in the
+     * Version History screen.
+     *
+     *   unchanged line
+     * - removed line
+     * + added line
+     */
     fun formatDiff(
         oldText: String,
         newText: String
     ): String {
+        val generator =
+            DiffRowGenerator.create()
+                .showInlineDiffs(false)
+                .build()
 
-        return calculateDiff(
-            oldText,
-            newText
-        ).joinToString("\n") { line ->
+        val rows =
+            generator.generateDiffRows(
+                textToLines(oldText),
+                textToLines(newText)
+            )
 
-            when (line.type) {
-                DiffType.UNCHANGED ->
-                    "  ${line.text}"
+        if (rows.isEmpty()) {
+            return "No differences"
+        }
 
-                DiffType.ADDED ->
-                    "+ ${line.text}"
+        return rows.joinToString("\n") { row ->
 
-                DiffType.REMOVED ->
-                    "- ${line.text}"
+            when (row.tag) {
+                DiffRow.Tag.EQUAL -> {
+                    "  ${row.oldLine}"
+                }
+
+                DiffRow.Tag.DELETE -> {
+                    "- ${row.oldLine}"
+                }
+
+                DiffRow.Tag.INSERT -> {
+                    "+ ${row.newLine}"
+                }
+
+                DiffRow.Tag.CHANGE -> {
+                    buildString {
+                        append("- ")
+                        append(row.oldLine)
+                        append("\n+ ")
+                        append(row.newLine)
+                    }
+                }
             }
         }
     }
 
-    private fun toLines(
+    private fun textToLines(
         text: String
     ): List<String> {
-
         return if (text.isEmpty()) {
             emptyList()
         } else {
             text.split("\n")
         }
-    }
-
-    private fun encode(
-        value: String
-    ): String {
-
-        return Base64.encodeToString(
-            value.toByteArray(
-                Charsets.UTF_8
-            ),
-            Base64.NO_WRAP
-        )
-    }
-
-    private fun decode(
-        value: String
-    ): String {
-
-        return String(
-            Base64.decode(
-                value,
-                Base64.NO_WRAP
-            ),
-            Charsets.UTF_8
-        )
     }
 }

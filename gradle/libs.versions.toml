@@ -9,6 +9,7 @@ material = "1.14.0"
 activityKtx = "1.13.0"
 constraintlayout = "2.2.1"
 recyclerview = "1.4.0"
+javaDiffUtils = "4.17"
 
 [libraries]
 androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
@@ -20,7 +21,7 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+java-diff-utils = { group = "io.github.java-diff-utils", name = "java-diff-utils", version.ref = "javaDiffUtils" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-

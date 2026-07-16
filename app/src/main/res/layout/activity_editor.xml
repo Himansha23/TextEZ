@@ -106,6 +106,15 @@
                 android:text="@string/read_only"
                 android:textColor="#111827" />
 
+            <Button
+                android:id="@+id/btnCreateVersion"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:minWidth="120dp"
+                android:text="@string/create_version"
+                android:textColor="#111827" />
+
         </LinearLayout>
 
     </HorizontalScrollView>

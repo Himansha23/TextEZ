@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.textez.R
 import com.example.textez.managers.KotlinSyntaxHighlighter
 import com.example.textez.managers.MarkdownSyntaxHighlighter
+import com.example.textez.managers.VersionManager
 import com.example.textez.storage.AutoSaveManager
 import com.example.textez.storage.RecentFilesManager
 import java.io.File
@@ -47,6 +48,7 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var btnSearch: Button
     private lateinit var btnReplace: Button
     private lateinit var btnReadOnly: Button
+    private lateinit var btnCreateVersion: Button
 
     private var originalKeyListener: KeyListener? = null
     private var isReadOnly = false
@@ -134,6 +136,7 @@ class EditorActivity : AppCompatActivity() {
         btnSearch = findViewById(R.id.btnSearch)
         btnReplace = findViewById(R.id.btnReplace)
         btnReadOnly = findViewById(R.id.btnReadOnly)
+        btnCreateVersion = findViewById(R.id.btnCreateVersion)
 
         originalKeyListener = editorText.keyListener
 
@@ -241,6 +244,10 @@ class EditorActivity : AppCompatActivity() {
             toggleReadOnlyMode()
         }
 
+        btnCreateVersion.setOnClickListener {
+            showCreateVersionDialog()
+        }
+
         updateReadOnlyInterface()
         updateStatus()
         scheduleSyntaxHighlighting()
@@ -340,10 +347,8 @@ class EditorActivity : AppCompatActivity() {
             btnRedo.isEnabled = false
             btnReplace.isEnabled = false
 
-            /*
-             * Search remains enabled in read-only mode.
-             */
             btnSearch.isEnabled = true
+            btnCreateVersion.isEnabled = true
 
         } else {
             editorText.keyListener =
@@ -363,6 +368,7 @@ class EditorActivity : AppCompatActivity() {
             btnRedo.isEnabled = true
             btnSearch.isEnabled = true
             btnReplace.isEnabled = true
+            btnCreateVersion.isEnabled = true
         }
     }
 
@@ -523,9 +529,6 @@ class EditorActivity : AppCompatActivity() {
                     txtFileName.text =
                         currentFileName
 
-                    /*
-                     * A newly created file begins as editable.
-                     */
                     isReadOnly = false
                     saveReadOnlyState()
                     updateReadOnlyInterface()
@@ -649,6 +652,88 @@ class EditorActivity : AppCompatActivity() {
                 this,
                 getString(
                     R.string.file_open_error
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun showCreateVersionDialog() {
+        if (currentFileName == DEFAULT_FILE_NAME) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.save_file_before_version
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
+
+        val input = EditText(this).apply {
+            hint = getString(
+                R.string.version_name_hint
+            )
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(
+                getString(R.string.create_version)
+            )
+            .setView(input)
+            .setPositiveButton(
+                getString(R.string.create_version)
+            ) { _, _ ->
+
+                val versionName =
+                    input.text.toString().trim()
+
+                if (versionName.isBlank()) {
+                    Toast.makeText(
+                        this,
+                        getString(
+                            R.string.version_name_required
+                        ),
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    return@setPositiveButton
+                }
+
+                createVersion(versionName)
+            }
+            .setNegativeButton(
+                getString(R.string.cancel),
+                null
+            )
+            .show()
+    }
+
+    private fun createVersion(
+        versionName: String
+    ) {
+        val version = VersionManager.createVersion(
+            context = this,
+            fileName = currentFileName,
+            content = editorText.text.toString(),
+            versionName = versionName
+        )
+
+        if (version != null) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.version_created,
+                    version.versionNumber
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.version_create_failed
                 ),
                 Toast.LENGTH_SHORT
             ).show()

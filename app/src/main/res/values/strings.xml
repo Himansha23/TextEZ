@@ -61,4 +61,11 @@
     <string name="status_read_only">Lines: %1$d  |  Characters: %2$d  |  Read Only</string>
     <string name="status_editable">Lines: %1$d  |  Characters: %2$d  |  Editable</string>
 
+    <string name="create_version">Create Version</string>
+    <string name="version_name_hint">Version name, for example Before changes</string>
+    <string name="version_name_required">Please enter a version name</string>
+    <string name="version_created">Version %1$d created successfully</string>
+    <string name="version_create_failed">Unable to create version</string>
+    <string name="save_file_before_version">Save the file before creating a version</string>
+
 </resources>

@@ -44,6 +44,15 @@
             android:text="@string/save_as"
             android:textColor="#FFFFFF" />
 
+        <Button
+            android:id="@+id/btnDelete"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:minWidth="72dp"
+            android:text="@string/delete"
+            android:textColor="#FCA5A5" />
+
     </LinearLayout>
 
     <HorizontalScrollView

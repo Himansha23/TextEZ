@@ -233,4 +233,11 @@
         Restored version loaded in the editor
     </string>
 
+    <string name="delete">Delete</string>
+    <string name="delete_file_title">Delete File?</string>
+    <string name="delete_file_message">Are you sure you want to delete %1$s? This action cannot be undone.</string>
+    <string name="file_deleted">File deleted successfully</string>
+    <string name="file_delete_failed">Unable to delete the file</string>
+    <string name="save_before_delete">Save the file before deleting it</string>
+
 </resources>

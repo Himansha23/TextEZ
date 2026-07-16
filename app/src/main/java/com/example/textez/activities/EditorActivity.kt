@@ -81,6 +81,8 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var btnVersionHistory:
             Button
 
+    private lateinit var btnDelete: Button
+
     private var originalKeyListener:
             KeyListener? = null
 
@@ -248,6 +250,11 @@ class EditorActivity : AppCompatActivity() {
                 R.id.btnSaveAs
             )
 
+        btnDelete =
+            findViewById(
+                R.id.btnDelete
+            )
+
         btnUndo =
             findViewById(
                 R.id.btnUndo
@@ -382,6 +389,10 @@ class EditorActivity : AppCompatActivity() {
             if (!isReadOnly) {
                 showSaveAsDialog()
             }
+        }
+
+        btnDelete.setOnClickListener {
+            showDeleteConfirmation()
         }
 
         btnUndo.setOnClickListener {
@@ -576,6 +587,8 @@ class EditorActivity : AppCompatActivity() {
             btnVersionHistory.isEnabled =
                 true
 
+            btnDelete.isEnabled = true
+
         } else {
 
             editorText.keyListener =
@@ -603,6 +616,9 @@ class EditorActivity : AppCompatActivity() {
 
             btnSaveAs.isEnabled =
                 true
+
+            btnDelete.isEnabled = true
+
 
             btnUndo.isEnabled =
                 true
@@ -717,6 +733,176 @@ class EditorActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
         }
+    }
+
+    private fun showDeleteConfirmation() {
+        if (currentFileName == DEFAULT_FILE_NAME) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.save_before_delete
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(
+                getString(
+                    R.string.delete_file_title
+                )
+            )
+            .setMessage(
+                getString(
+                    R.string.delete_file_message,
+                    currentFileName
+                )
+            )
+            .setPositiveButton(
+                getString(R.string.delete)
+            ) { _, _ ->
+
+                deleteCurrentFile()
+            }
+            .setNegativeButton(
+                getString(R.string.cancel),
+                null
+            )
+            .show()
+    }
+
+    private fun deleteCurrentFile() {
+        try {
+            val fileToDelete =
+                File(
+                    getTextEZFolder(),
+                    currentFileName
+                )
+
+            if (
+                fileToDelete.exists() &&
+                !fileToDelete.delete()
+            ) {
+                showDeleteFailed()
+                return
+            }
+
+            val historyDeleted =
+                VersionManager.deleteVersionHistory(
+                    context = this,
+                    fileName = currentFileName
+                )
+
+            if (!historyDeleted) {
+                showDeleteFailed()
+                return
+            }
+
+            removeFromRecentFiles(
+                currentFileName
+            )
+
+            removeReadOnlyState(
+                currentFileName
+            )
+
+            AutoSaveManager.clearRecovery(
+                this
+            )
+
+            resetEditorAfterDelete()
+
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.file_deleted
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+        } catch (exception: Exception) {
+            showDeleteFailed()
+        }
+    }
+
+    private fun removeFromRecentFiles(
+        fileName: String
+    ) {
+        val preferences =
+            getSharedPreferences(
+                RecentFilesManager.PREFERENCES_NAME,
+                MODE_PRIVATE
+            )
+
+        val updatedRecentFiles =
+            RecentFilesManager
+                .getRecentFiles(preferences)
+                .filterNot {
+                    it == fileName
+                }
+
+        RecentFilesManager.saveRecentFiles(
+            preferences,
+            updatedRecentFiles
+        )
+    }
+
+    private fun removeReadOnlyState(
+        fileName: String
+    ) {
+        val preferences =
+            getSharedPreferences(
+                READ_ONLY_PREFERENCES,
+                MODE_PRIVATE
+            )
+
+        preferences.edit()
+            .remove(
+                READ_ONLY_KEY_PREFIX +
+                        fileName
+            )
+            .apply()
+    }
+
+    private fun resetEditorAfterDelete() {
+        isUndoRedoAction = true
+
+        editorText.setText("")
+
+        isUndoRedoAction = false
+
+        currentFileName =
+            DEFAULT_FILE_NAME
+
+        txtFileName.text =
+            currentFileName
+
+        isReadOnly = false
+
+        undoStack.clear()
+        redoStack.clear()
+
+        previousText = ""
+
+        lastSavedOrRecoveredContent = ""
+
+        hasUnsavedChanges = false
+
+        updateReadOnlyInterface()
+        updateStatus()
+        scheduleSyntaxHighlighting()
+    }
+
+    private fun showDeleteFailed() {
+        Toast.makeText(
+            this,
+            getString(
+                R.string.file_delete_failed
+            ),
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun showSaveAsDialog() {

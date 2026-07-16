@@ -561,6 +561,34 @@ object VersionManager {
         }
     }
 
+
+    /**
+     * Deletes all version-control files belonging to one document.
+     */
+    fun deleteVersionHistory(
+        context: Context,
+        fileName: String
+    ): Boolean {
+        return try {
+            val versionFolder =
+                getVersionFolder(
+                    context = context,
+                    fileName = fileName
+                )
+
+            if (!versionFolder.exists()) {
+                true
+            } else {
+                versionFolder.deleteRecursively()
+            }
+
+        } catch (exception: Exception) {
+            false
+        }
+    }
+
+
+
     /**
      * Creates and returns the version directory for one document.
      */

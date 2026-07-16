@@ -3,23 +3,41 @@
 
     <string name="app_name">TextEZ</string>
     <string name="app_subtitle">Mobile Text Editor</string>
+
     <string name="new_file">New File</string>
     <string name="open_file">Open File</string>
     <string name="version">Version 1.0</string>
+
     <string name="new_file_icon">New File Icon</string>
     <string name="open_file_icon">Open File Icon</string>
 
     <string name="untitled_file">Untitled.txt</string>
+
     <string name="save">Save</string>
     <string name="save_as">Save As</string>
+
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
     <string name="search">Search</string>
     <string name="replace">Replace</string>
+
     <string name="editor_hint">Start typing here...</string>
 
-    <string name="status_default">Lines: 1  |  Characters: 0</string>
-    <string name="status_format">Lines: %1$d  |  Characters: %2$d</string>
+    <string name="status_default">
+        Lines: 1 | Characters: 0
+    </string>
+
+    <string name="status_format">
+        Lines: %1$d | Characters: %2$d
+    </string>
+
+    <string name="status_read_only">
+        Lines: %1$d | Characters: %2$d | Read Only
+    </string>
+
+    <string name="status_editable">
+        Lines: %1$d | Characters: %2$d | Editable
+    </string>
 
     <string name="search_word">Search word</string>
     <string name="replace_with">Replace with</string>
@@ -28,57 +46,191 @@
     <string name="replace_all">Replace All</string>
     <string name="cancel">Cancel</string>
 
-    <string name="file_name_hint">Enter filename, for example Notes.txt</string>
-    <string name="file_name_required">Please enter a file name</string>
-    <string name="invalid_file_name">Invalid file name</string>
-    <string name="file_exists">File already exists</string>
-    <string name="overwrite_message">%1$s already exists. Replace it?</string>
+    <string name="file_name_hint">
+        Enter filename, for example Notes.txt
+    </string>
+
+    <string name="file_name_required">
+        Please enter a file name
+    </string>
+
+    <string name="invalid_file_name">
+        Invalid file name
+    </string>
+
+    <string name="file_exists">
+        File already exists
+    </string>
+
+    <string name="overwrite_message">
+        %1$s already exists. Replace it?
+    </string>
+
     <string name="overwrite">Overwrite</string>
 
-    <string name="file_saved">File saved successfully</string>
-    <string name="file_save_error">File save failed</string>
-    <string name="file_open_error">Unable to open the file</string>
-    <string name="file_not_found">File not found</string>
+    <string name="file_saved">
+        File saved successfully
+    </string>
 
-    <string name="recent_files_hint">Recent files appear first with a star.</string>
-    <string name="no_saved_files">No saved files yet</string>
+    <string name="file_save_error">
+        File save failed
+    </string>
 
-    <string name="nothing_to_undo">Nothing to undo</string>
-    <string name="nothing_to_redo">Nothing to redo</string>
-    <string name="text_not_found">Text not found</string>
+    <string name="file_open_error">
+        Unable to open the file
+    </string>
 
-    <string name="recovery_title">Unsaved work found</string>
-    <string name="recovery_message">TextEZ found unsaved content for %1$s. Would you like to restore it?</string>
+    <string name="file_not_found">
+        File not found
+    </string>
+
+    <string name="recent_files_hint">
+        Recent files appear first with a star.
+    </string>
+
+    <string name="no_saved_files">
+        No saved files yet
+    </string>
+
+    <string name="nothing_to_undo">
+        Nothing to undo
+    </string>
+
+    <string name="nothing_to_redo">
+        Nothing to redo
+    </string>
+
+    <string name="text_not_found">
+        Text not found
+    </string>
+
+    <string name="recovery_title">
+        Unsaved work found
+    </string>
+
+    <string name="recovery_message">
+        TextEZ found unsaved content for %1$s. Would you like to restore it?
+    </string>
+
     <string name="restore">Restore</string>
     <string name="discard">Discard</string>
-    <string name="recovery_restored">Unsaved content restored</string>
-    <string name="autosave_failed">Recovery autosave failed</string>
+
+    <string name="recovery_restored">
+        Unsaved content restored
+    </string>
+
+    <string name="autosave_failed">
+        Recovery autosave failed
+    </string>
 
     <string name="read_only">Read Only</string>
     <string name="edit_mode">Edit Mode</string>
-    <string name="read_only_enabled">Read-only mode enabled</string>
-    <string name="edit_mode_enabled">Editing enabled</string>
-    <string name="status_read_only">Lines: %1$d  |  Characters: %2$d  |  Read Only</string>
-    <string name="status_editable">Lines: %1$d  |  Characters: %2$d  |  Editable</string>
 
-    <string name="create_version">Create Version</string>
-    <string name="version_name_hint">Version name, for example Before changes</string>
-    <string name="version_name_required">Please enter a version name</string>
-    <string name="version_created">Version %1$d created successfully</string>
-    <string name="version_create_failed">Unable to create version</string>
-    <string name="save_file_before_version">Save the file before creating a version</string>
+    <string name="read_only_enabled">
+        Read-only mode enabled
+    </string>
+
+    <string name="edit_mode_enabled">
+        Editing enabled
+    </string>
+
+    <string name="create_version">
+        Create Version
+    </string>
+
+    <string name="version_name_hint">
+        Version name, for example Before changes
+    </string>
+
+    <string name="version_name_required">
+        Please enter a version name
+    </string>
+
+    <string name="version_created">
+        Version %1$d created successfully
+    </string>
+
+    <string name="version_create_failed">
+        Unable to create version
+    </string>
+
+    <string name="save_file_before_version">
+        Save the file before creating or viewing versions
+    </string>
 
     <string name="history">History</string>
     <string name="version_history">Version History</string>
-    <string name="no_versions">No versions created for this file</string>
 
-    <string name="version_number_format">Version %1$d</string>
-    <string name="version_number_preview">Version 1</string>
-    <string name="version_name_preview">Initial version</string>
-    <string name="version_date_preview">17 Jul 2026, 10:30 AM</string>
+    <string name="no_versions">
+        No versions created for this file
+    </string>
 
-    <string name="version_preview_title">Version %1$d Preview</string>
-    <string name="version_load_failed">Unable to load this version</string>
+    <string name="version_number_format">
+        Version %1$d
+    </string>
+
+    <string name="version_number_preview">
+        Version 1
+    </string>
+
+    <string name="version_name_preview">
+        Initial version
+    </string>
+
+    <string name="version_date_preview">
+        17 Jul 2026, 10:30 AM
+    </string>
+
+    <string name="version_preview_title">
+        Version %1$d Preview
+    </string>
+
+    <string name="version_load_failed">
+        Unable to load this version
+    </string>
+
     <string name="close">Close</string>
+
+    <string name="preview">Preview</string>
+    <string name="compare">Compare</string>
+
+    <string name="version_actions_title">
+        Version %1$d Actions
+    </string>
+
+    <string name="base_version">Base</string>
+    <string name="delta_version">Delta</string>
+
+    <string name="version_details_format">
+        %1$s\n%2$s\nStorage: %3$s
+    </string>
+
+    <string name="compare_version_title">
+        Compare Version %1$d
+    </string>
+
+    <string name="diff_legend">
+        - removed from the selected version\n+ added in the current file
+    </string>
+
+    <string name="restore_version_title">
+        Restore Version %1$d?
+    </string>
+
+    <string name="restore_version_message">
+        The current file will be replaced. TextEZ will automatically create a backup version before rollback.
+    </string>
+
+    <string name="rollback_successful">
+        Rolled back to Version %1$d
+    </string>
+
+    <string name="rollback_failed">
+        Unable to restore this version
+    </string>
+
+    <string name="rollback_loaded">
+        Restored version loaded in the editor
+    </string>
 
 </resources>

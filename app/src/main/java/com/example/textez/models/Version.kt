@@ -4,6 +4,8 @@ data class Version(
     val versionNumber: Int,
     val versionName: String,
     val fileName: String,
-    val snapshotFileName: String,
-    val createdAt: Long
+    val storageFileName: String,
+    val createdAt: Long,
+    val isBaseVersion: Boolean,
+    val previousVersionNumber: Int?
 )

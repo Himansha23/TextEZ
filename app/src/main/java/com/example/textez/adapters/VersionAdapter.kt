@@ -13,8 +13,11 @@ import java.util.Locale
 
 class VersionAdapter(
     private val versions: List<Version>,
-    private val onVersionClick: (Version) -> Unit
-) : RecyclerView.Adapter<VersionAdapter.VersionViewHolder>() {
+    private val onVersionClick:
+        (Version) -> Unit
+) : RecyclerView.Adapter<
+        VersionAdapter.VersionViewHolder
+        >() {
 
     class VersionViewHolder(
         itemView: View
@@ -34,6 +37,11 @@ class VersionAdapter(
             itemView.findViewById(
                 R.id.txtVersionDate
             )
+
+        val txtVersionType: TextView =
+            itemView.findViewById(
+                R.id.txtVersionType
+            )
     }
 
     override fun onCreateViewHolder(
@@ -41,13 +49,14 @@ class VersionAdapter(
         viewType: Int
     ): VersionViewHolder {
 
-        val view = LayoutInflater
-            .from(parent.context)
-            .inflate(
-                R.layout.item_version,
-                parent,
-                false
-            )
+        val view =
+            LayoutInflater
+                .from(parent.context)
+                .inflate(
+                    R.layout.item_version,
+                    parent,
+                    false
+                )
 
         return VersionViewHolder(view)
     }
@@ -56,10 +65,14 @@ class VersionAdapter(
         holder: VersionViewHolder,
         position: Int
     ) {
-        val version = versions[position]
+        val version =
+            versions[position]
+
+        val context =
+            holder.itemView.context
 
         holder.txtVersionNumber.text =
-            holder.itemView.context.getString(
+            context.getString(
                 R.string.version_number_format,
                 version.versionNumber
             )
@@ -67,19 +80,33 @@ class VersionAdapter(
         holder.txtVersionName.text =
             version.versionName
 
-        val formatter = SimpleDateFormat(
-            "dd MMM yyyy, hh:mm a",
-            Locale.getDefault()
-        )
+        holder.txtVersionType.text =
+            if (version.isBaseVersion) {
+                context.getString(
+                    R.string.base_version
+                )
+            } else {
+                context.getString(
+                    R.string.delta_version
+                )
+            }
+
+        val formatter =
+            SimpleDateFormat(
+                "dd MMM yyyy, hh:mm a",
+                Locale.getDefault()
+            )
 
         holder.txtVersionDate.text =
             formatter.format(
                 Date(version.createdAt)
             )
 
-        holder.itemView.setOnClickListener {
-            onVersionClick(version)
-        }
+        holder.itemView
+            .setOnClickListener {
+
+                onVersionClick(version)
+            }
     }
 
     override fun getItemCount(): Int {

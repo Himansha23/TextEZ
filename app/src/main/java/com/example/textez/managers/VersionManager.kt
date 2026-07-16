@@ -7,9 +7,26 @@ import java.util.Properties
 
 object VersionManager {
 
-    private const val VERSIONS_FOLDER = "TextEZVersions"
-    private const val SNAPSHOT_EXTENSION = ".snapshot"
-    private const val METADATA_EXTENSION = ".properties"
+    private const val VERSIONS_FOLDER =
+        "TextEZVersions"
+
+    private const val DOCUMENTS_FOLDER =
+        "TextEZ"
+
+    private const val BASE_EXTENSION =
+        ".base"
+
+    private const val PATCH_EXTENSION =
+        ".patch"
+
+    private const val METADATA_EXTENSION =
+        ".properties"
+
+    private const val STORAGE_BASE =
+        "BASE"
+
+    private const val STORAGE_PATCH =
+        "PATCH"
 
     fun createVersion(
         context: Context,
@@ -17,83 +34,166 @@ object VersionManager {
         content: String,
         versionName: String
     ): Version? {
-        return try {
-            val fileFolder = getVersionFolder(
-                context,
-                fileName
-            )
 
-            val nextVersionNumber =
-                getNextVersionNumber(fileFolder)
+        return try {
+            val folder =
+                getVersionFolder(
+                    context,
+                    fileName
+                )
+
+            val currentVersions =
+                getVersions(
+                    context,
+                    fileName
+                )
+
+            val nextNumber =
+                (
+                        currentVersions
+                            .maxOfOrNull {
+                                it.versionNumber
+                            } ?: 0
+                        ) + 1
 
             val numberText =
-                nextVersionNumber.toString()
+                nextNumber
+                    .toString()
                     .padStart(4, '0')
-
-            val snapshotFileName =
-                "version_$numberText$SNAPSHOT_EXTENSION"
-
-            val metadataFileName =
-                "version_$numberText$METADATA_EXTENSION"
-
-            val snapshotFile = File(
-                fileFolder,
-                snapshotFileName
-            )
-
-            val metadataFile = File(
-                fileFolder,
-                metadataFileName
-            )
-
-            snapshotFile.writeText(
-                content,
-                Charsets.UTF_8
-            )
 
             val createdAt =
                 System.currentTimeMillis()
 
-            val properties = Properties().apply {
-                setProperty(
-                    "version_number",
-                    nextVersionNumber.toString()
+            val previousVersion =
+                currentVersions
+                    .maxByOrNull {
+                        it.versionNumber
+                    }
+
+            val isBase =
+                previousVersion == null
+
+            val storageFileName =
+                if (isBase) {
+                    "version_$numberText$BASE_EXTENSION"
+                } else {
+                    "version_$numberText$PATCH_EXTENSION"
+                }
+
+            val storageFile =
+                File(
+                    folder,
+                    storageFileName
                 )
 
-                setProperty(
-                    "version_name",
-                    versionName
+            if (isBase) {
+                storageFile.writeText(
+                    content,
+                    Charsets.UTF_8
                 )
+            } else {
+                val previousContent =
+                    loadVersionContent(
+                        context,
+                        previousVersion
+                    ) ?: return null
 
-                setProperty(
-                    "file_name",
-                    fileName
-                )
+                val patch =
+                    LineDiffManager.createPatch(
+                        previousContent,
+                        content
+                    )
 
-                setProperty(
-                    "snapshot_file",
-                    snapshotFileName
-                )
-
-                setProperty(
-                    "created_at",
-                    createdAt.toString()
+                storageFile.writeText(
+                    patch,
+                    Charsets.UTF_8
                 )
             }
 
-            metadataFile.outputStream().use { output ->
-                properties.store(
-                    output,
-                    "TextEZ version metadata"
+            val metadataFile =
+                File(
+                    folder,
+                    "version_$numberText$METADATA_EXTENSION"
                 )
-            }
+
+            val properties =
+                Properties().apply {
+
+                    setProperty(
+                        "version_number",
+                        nextNumber.toString()
+                    )
+
+                    setProperty(
+                        "version_name",
+                        versionName
+                    )
+
+                    setProperty(
+                        "file_name",
+                        fileName
+                    )
+
+                    setProperty(
+                        "storage_file",
+                        storageFileName
+                    )
+
+                    setProperty(
+                        "storage_type",
+                        if (isBase) {
+                            STORAGE_BASE
+                        } else {
+                            STORAGE_PATCH
+                        }
+                    )
+
+                    setProperty(
+                        "created_at",
+                        createdAt.toString()
+                    )
+
+                    setProperty(
+                        "previous_version",
+                        previousVersion
+                            ?.versionNumber
+                            ?.toString()
+                            .orEmpty()
+                    )
+                }
+
+            metadataFile
+                .outputStream()
+                .use { output ->
+
+                    properties.store(
+                        output,
+                        "TextEZ version metadata"
+                    )
+                }
 
             Version(
-                versionNumber = nextVersionNumber,
-                versionName = versionName,
-                fileName = fileName,
-                snapshotFileName = snapshotFileName,
-                createdAt = createdAt
+                versionNumber =
+                    nextNumber,
+
+                versionName =
+                    versionName,
+
+                fileName =
+                    fileName,
+
+                storageFileName =
+                    storageFileName,
+
+                createdAt =
+                    createdAt,
+
+                isBaseVersion =
+                    isBase,
+
+                previousVersionNumber =
+                    previousVersion
+                        ?.versionNumber
             )
 
         } catch (exception: Exception) {
@@ -105,21 +205,25 @@ object VersionManager {
         context: Context,
         fileName: String
     ): List<Version> {
-        return try {
-            val folder = getVersionFolder(
-                context,
-                fileName
-            )
 
-            folder.listFiles()
+        return try {
+            val folder =
+                getVersionFolder(
+                    context,
+                    fileName
+                )
+
+            folder
+                .listFiles()
                 ?.filter { file ->
+
                     file.isFile &&
                             file.name.endsWith(
                                 METADATA_EXTENSION
                             )
                 }
-                ?.mapNotNull { metadataFile ->
-                    readVersionMetadata(metadataFile)
+                ?.mapNotNull { file ->
+                    readVersionMetadata(file)
                 }
                 ?.sortedByDescending {
                     it.versionNumber
@@ -135,39 +239,193 @@ object VersionManager {
         context: Context,
         version: Version
     ): String? {
+
         return try {
-            val folder = getVersionFolder(
-                context,
-                version.fileName
-            )
+            val ascendingVersions =
+                getVersions(
+                    context,
+                    version.fileName
+                ).sortedBy {
+                    it.versionNumber
+                }
 
-            val snapshotFile = File(
-                folder,
-                version.snapshotFileName
-            )
+            var reconstructedContent:
+                    String? = null
 
-            if (!snapshotFile.exists()) {
-                return null
+            for (item in ascendingVersions) {
+
+                if (item.isBaseVersion) {
+
+                    val baseFile =
+                        File(
+                            getVersionFolder(
+                                context,
+                                item.fileName
+                            ),
+                            item.storageFileName
+                        )
+
+                    if (!baseFile.exists()) {
+                        return null
+                    }
+
+                    reconstructedContent =
+                        baseFile.readText(
+                            Charsets.UTF_8
+                        )
+
+                } else {
+                    val previousContent =
+                        reconstructedContent
+                            ?: return null
+
+                    val patchFile =
+                        File(
+                            getVersionFolder(
+                                context,
+                                item.fileName
+                            ),
+                            item.storageFileName
+                        )
+
+                    if (!patchFile.exists()) {
+                        return null
+                    }
+
+                    reconstructedContent =
+                        LineDiffManager.applyPatch(
+                            previousContent,
+                            patchFile.readText(
+                                Charsets.UTF_8
+                            )
+                        ) ?: return null
+                }
+
+                if (
+                    item.versionNumber ==
+                    version.versionNumber
+                ) {
+                    return reconstructedContent
+                }
             }
 
-            snapshotFile.readText(
-                Charsets.UTF_8
-            )
+            null
 
         } catch (exception: Exception) {
             null
         }
     }
 
+    fun loadCurrentFileContent(
+        context: Context,
+        fileName: String
+    ): String? {
+
+        return try {
+            val file =
+                File(
+                    File(
+                        context.filesDir,
+                        DOCUMENTS_FOLDER
+                    ),
+                    fileName
+                )
+
+            if (!file.exists()) {
+                null
+            } else {
+                file.readText(
+                    Charsets.UTF_8
+                )
+            }
+
+        } catch (exception: Exception) {
+            null
+        }
+    }
+
+    fun rollbackToVersion(
+        context: Context,
+        version: Version
+    ): Boolean {
+
+        return try {
+            val versionContent =
+                loadVersionContent(
+                    context,
+                    version
+                ) ?: return false
+
+            val documentFolder =
+                File(
+                    context.filesDir,
+                    DOCUMENTS_FOLDER
+                )
+
+            if (!documentFolder.exists()) {
+                documentFolder.mkdirs()
+            }
+
+            val currentFile =
+                File(
+                    documentFolder,
+                    version.fileName
+                )
+
+            val currentContent =
+                if (currentFile.exists()) {
+                    currentFile.readText(
+                        Charsets.UTF_8
+                    )
+                } else {
+                    ""
+                }
+
+            /*
+             * Protect the current state by creating
+             * another version before rollback.
+             */
+            if (
+                currentFile.exists() &&
+                currentContent != versionContent
+            ) {
+                createVersion(
+                    context = context,
+                    fileName =
+                        version.fileName,
+                    content =
+                        currentContent,
+                    versionName =
+                        "Automatic backup before rollback"
+                )
+            }
+
+            currentFile.writeText(
+                versionContent,
+                Charsets.UTF_8
+            )
+
+            true
+
+        } catch (exception: Exception) {
+            false
+        }
+    }
+
     private fun readVersionMetadata(
         metadataFile: File
     ): Version? {
-        return try {
-            val properties = Properties()
 
-            metadataFile.inputStream().use { input ->
-                properties.load(input)
-            }
+        return try {
+            val properties =
+                Properties()
+
+            metadataFile
+                .inputStream()
+                .use { input ->
+
+                    properties.load(input)
+                }
 
             val versionNumber =
                 properties.getProperty(
@@ -185,9 +443,14 @@ object VersionManager {
                     "file_name"
                 ).orEmpty()
 
-            val snapshotFileName =
+            val storageFileName =
                 properties.getProperty(
-                    "snapshot_file"
+                    "storage_file"
+                ).orEmpty()
+
+            val storageType =
+                properties.getProperty(
+                    "storage_type"
                 ).orEmpty()
 
             val createdAt =
@@ -196,12 +459,32 @@ object VersionManager {
                 )?.toLongOrNull()
                     ?: 0L
 
+            val previousVersion =
+                properties.getProperty(
+                    "previous_version"
+                )?.toIntOrNull()
+
             Version(
-                versionNumber = versionNumber,
-                versionName = versionName,
-                fileName = fileName,
-                snapshotFileName = snapshotFileName,
-                createdAt = createdAt
+                versionNumber =
+                    versionNumber,
+
+                versionName =
+                    versionName,
+
+                fileName =
+                    fileName,
+
+                storageFileName =
+                    storageFileName,
+
+                createdAt =
+                    createdAt,
+
+                isBaseVersion =
+                    storageType == STORAGE_BASE,
+
+                previousVersionNumber =
+                    previousVersion
             )
 
         } catch (exception: Exception) {
@@ -213,56 +496,33 @@ object VersionManager {
         context: Context,
         fileName: String
     ): File {
-        val rootFolder = File(
-            context.filesDir,
-            VERSIONS_FOLDER
-        )
+
+        val rootFolder =
+            File(
+                context.filesDir,
+                VERSIONS_FOLDER
+            )
 
         if (!rootFolder.exists()) {
             rootFolder.mkdirs()
         }
 
-        val safeFolderName = fileName.replace(
-            Regex("""[\\/:*?"<>|.]"""),
-            "_"
-        )
+        val safeFolderName =
+            fileName.replace(
+                Regex("""[\\/:*?"<>|.]"""),
+                "_"
+            )
 
-        val fileFolder = File(
-            rootFolder,
-            safeFolderName
-        )
+        val fileFolder =
+            File(
+                rootFolder,
+                safeFolderName
+            )
 
         if (!fileFolder.exists()) {
             fileFolder.mkdirs()
         }
 
         return fileFolder
-    }
-
-    private fun getNextVersionNumber(
-        folder: File
-    ): Int {
-        val existingNumbers = folder
-            .listFiles()
-            ?.filter { file ->
-                file.isFile &&
-                        file.name.endsWith(
-                            METADATA_EXTENSION
-                        )
-            }
-            ?.mapNotNull { file ->
-                Regex(
-                    """version_(\d{4})\.properties"""
-                )
-                    .matchEntire(file.name)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.toIntOrNull()
-            }
-            .orEmpty()
-
-        return (
-                existingNumbers.maxOrNull() ?: 0
-                ) + 1
     }
 }

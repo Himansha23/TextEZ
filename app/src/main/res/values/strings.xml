@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">TextEZ</string>
+    <string name="app_subtitle">Mobile Text Editor</string>
+    <string name="new_file">New File</string>
+    <string name="open_file">Open File</string>
+    <string name="version">Version 1.0</string>
+    <string name="new_file_icon">New File Icon</string>
+    <string name="open_file_icon">Open File Icon</string>
+
+    <string name="untitled_file">Untitled.txt</string>
+    <string name="save">Save</string>
+    <string name="save_as">Save As</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="search">Search</string>
+    <string name="replace">Replace</string>
+    <string name="editor_hint">Start typing here...</string>
+
+    <string name="status_default">Lines: 1  |  Characters: 0</string>
+    <string name="status_format">Lines: %1$d  |  Characters: %2$d</string>
+
+    <string name="search_word">Search word</string>
+    <string name="replace_with">Replace with</string>
+    <string name="find">Find</string>
+    <string name="replace_one">Replace One</string>
+    <string name="replace_all">Replace All</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="file_name_hint">Enter filename, for example Notes.txt</string>
+    <string name="file_name_required">Please enter a file name</string>
+    <string name="invalid_file_name">Invalid file name</string>
+    <string name="file_exists">File already exists</string>
+    <string name="overwrite_message">%1$s already exists. Replace it?</string>
+    <string name="overwrite">Overwrite</string>
+
+    <string name="file_saved">File saved successfully</string>
+    <string name="file_save_error">File save failed</string>
+    <string name="file_open_error">Unable to open the file</string>
+    <string name="file_not_found">File not found</string>
+
+    <string name="recent_files_hint">Recent files appear first with a star.</string>
+    <string name="no_saved_files">No saved files yet</string>
+
+    <string name="nothing_to_undo">Nothing to undo</string>
+    <string name="nothing_to_redo">Nothing to redo</string>
+    <string name="text_not_found">Text not found</string>
+
+    <string name="recovery_title">Unsaved work found</string>
+    <string name="recovery_message">TextEZ found unsaved content for %1$s. Would you like to restore it?</string>
+    <string name="restore">Restore</string>
+    <string name="discard">Discard</string>
+    <string name="recovery_restored">Unsaved content restored</string>
+    <string name="autosave_failed">Recovery autosave failed</string>
+
+    <string name="read_only">Read Only</string>
+    <string name="edit_mode">Edit Mode</string>
+    <string name="read_only_enabled">Read-only mode enabled</string>
+    <string name="edit_mode_enabled">Editing enabled</string>
+    <string name="status_read_only">Lines: %1$d  |  Characters: %2$d  |  Read Only</string>
+    <string name="status_editable">Lines: %1$d  |  Characters: %2$d  |  Editable</string>
+
+</resources>

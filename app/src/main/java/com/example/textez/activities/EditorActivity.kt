@@ -17,17 +17,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.textez.R
 import com.example.textez.managers.KotlinSyntaxHighlighter
+import com.example.textez.managers.LanguageDetector
 import com.example.textez.managers.MarkdownSyntaxHighlighter
 import com.example.textez.managers.VersionManager
 import com.example.textez.storage.AutoSaveManager
 import com.example.textez.storage.RecentFilesManager
 import java.io.File
+import android.text.InputType
+import android.text.style.SuggestionSpan
 
 class EditorActivity : AppCompatActivity() {
 
     companion object {
-        const val EXTRA_FILE_NAME =
-            "file_name"
+        const val EXTRA_FILE_NAME = "file_name"
 
         private const val DEFAULT_FILE_NAME =
             "Untitled.txt"
@@ -35,8 +37,8 @@ class EditorActivity : AppCompatActivity() {
         private const val AUTO_SAVE_INTERVAL =
             10_000L
 
-        private const val SYNTAX_DELAY =
-            180L
+        private const val SYNTAX_DETECTION_DELAY =
+            350L
 
         private const val READ_ONLY_PREFERENCES =
             "textez_read_only_preferences"
@@ -45,48 +47,26 @@ class EditorActivity : AppCompatActivity() {
             "read_only_"
     }
 
-    private lateinit var editorText:
-            EditText
+    private lateinit var editorText: EditText
+    private lateinit var txtFileName: TextView
+    private lateinit var txtStatus: TextView
 
-    private lateinit var txtFileName:
-            TextView
-
-    private lateinit var txtStatus:
-            TextView
-
-    private lateinit var btnSave:
-            Button
-
-    private lateinit var btnSaveAs:
-            Button
-
-    private lateinit var btnUndo:
-            Button
-
-    private lateinit var btnRedo:
-            Button
-
-    private lateinit var btnSearch:
-            Button
-
-    private lateinit var btnReplace:
-            Button
-
-    private lateinit var btnReadOnly:
-            Button
-
-    private lateinit var btnCreateVersion:
-            Button
-
-    private lateinit var btnVersionHistory:
-            Button
-
+    private lateinit var btnSave: Button
+    private lateinit var btnSaveAs: Button
     private lateinit var btnDelete: Button
+    private lateinit var btnUndo: Button
+    private lateinit var btnRedo: Button
+    private lateinit var btnSearch: Button
+    private lateinit var btnReplace: Button
+    private lateinit var btnReadOnly: Button
+    private lateinit var btnCreateVersion: Button
+    private lateinit var btnVersionHistory: Button
 
-    private var originalKeyListener:
-            KeyListener? = null
+    private var originalKeyListener: KeyListener? =
+        null
 
-    private var isReadOnly = false
+    private var isReadOnly =
+        false
 
     private val undoStack =
         mutableListOf<String>()
@@ -97,7 +77,8 @@ class EditorActivity : AppCompatActivity() {
     private var isUndoRedoAction =
         false
 
-    private var previousText = ""
+    private var previousText =
+        ""
 
     private var currentFileName =
         DEFAULT_FILE_NAME
@@ -115,14 +96,12 @@ class EditorActivity : AppCompatActivity() {
         ) { result ->
 
             val rolledBack =
-                result.resultCode ==
-                        RESULT_OK &&
-                        result.data
-                            ?.getBooleanExtra(
-                                VersionHistoryActivity
-                                    .EXTRA_ROLLED_BACK,
-                                false
-                            ) == true
+                result.resultCode == RESULT_OK &&
+                        result.data?.getBooleanExtra(
+                            VersionHistoryActivity
+                                .EXTRA_ROLLED_BACK,
+                            false
+                        ) == true
 
             if (rolledBack) {
                 loadCurrentFile()
@@ -152,46 +131,7 @@ class EditorActivity : AppCompatActivity() {
                 return@Runnable
             }
 
-            when {
-                isKotlinFile() -> {
-
-                    MarkdownSyntaxHighlighter
-                        .clear(
-                            editorText.text
-                        )
-
-                    KotlinSyntaxHighlighter
-                        .highlight(
-                            editorText.text
-                        )
-                }
-
-                isMarkdownFile() -> {
-
-                    KotlinSyntaxHighlighter
-                        .clear(
-                            editorText.text
-                        )
-
-                    MarkdownSyntaxHighlighter
-                        .highlight(
-                            editorText.text
-                        )
-                }
-
-                else -> {
-
-                    KotlinSyntaxHighlighter
-                        .clear(
-                            editorText.text
-                        )
-
-                    MarkdownSyntaxHighlighter
-                        .clear(
-                            editorText.text
-                        )
-                }
-            }
+            applyDetectedSyntaxHighlighting()
         }
 
     private val autoSaveHandler =
@@ -203,28 +143,42 @@ class EditorActivity : AppCompatActivity() {
         object : Runnable {
 
             override fun run() {
-
                 saveRecoveryIfNeeded()
 
-                autoSaveHandler
-                    .postDelayed(
-                        this,
-                        AUTO_SAVE_INTERVAL
-                    )
+                autoSaveHandler.postDelayed(
+                    this,
+                    AUTO_SAVE_INTERVAL
+                )
             }
         }
 
     override fun onCreate(
         savedInstanceState: Bundle?
     ) {
-        super.onCreate(
-            savedInstanceState
-        )
+        super.onCreate(savedInstanceState)
 
         setContentView(
             R.layout.activity_editor
         )
 
+        initializeViews()
+        initializeFile()
+        initializeTextWatcher()
+        initializeButtonListeners()
+
+        loadReadOnlyState()
+        updateReadOnlyInterface()
+        updateStatus()
+        scheduleSyntaxHighlighting()
+        checkForRecovery()
+
+        autoSaveHandler.postDelayed(
+            autoSaveRunnable,
+            AUTO_SAVE_INTERVAL
+        )
+    }
+
+    private fun initializeViews() {
         editorText =
             findViewById(
                 R.id.editorText
@@ -293,15 +247,21 @@ class EditorActivity : AppCompatActivity() {
         originalKeyListener =
             editorText.keyListener
 
+        editorText.setRawInputType(
+            InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+                    InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        )
+    }
+
+    private fun initializeFile() {
         val openedFileName =
             intent.getStringExtra(
                 EXTRA_FILE_NAME
             )
 
-        if (
-            !openedFileName
-                .isNullOrBlank()
-        ) {
+        if (!openedFileName.isNullOrBlank()) {
             currentFileName =
                 openedFileName
 
@@ -312,64 +272,83 @@ class EditorActivity : AppCompatActivity() {
             currentFileName
 
         previousText =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         lastSavedOrRecoveredContent =
-            editorText.text
-                .toString()
+            editorText.text.toString()
+    }
 
-        loadReadOnlyState()
+    private fun initializeTextWatcher() {
+        editorText.addTextChangedListener(
+            object : TextWatcher {
 
-        editorText
-            .addTextChangedListener(
-                object : TextWatcher {
-
-                    override fun beforeTextChanged(
-                        text: CharSequence?,
-                        start: Int,
-                        count: Int,
-                        after: Int
-                    ) {
-                        if (!isUndoRedoAction) {
-                            previousText =
-                                text.toString()
-                        }
-                    }
-
-                    override fun onTextChanged(
-                        text: CharSequence?,
-                        start: Int,
-                        before: Int,
-                        count: Int
-                    ) {
-                        // No action needed.
-                    }
-
-                    override fun afterTextChanged(
-                        text: Editable?
-                    ) {
-                        if (!isUndoRedoAction) {
-                            undoStack.add(
-                                previousText
-                            )
-
-                            redoStack.clear()
-                        }
-
-                        hasUnsavedChanges =
-                            editorText.text
-                                .toString() !=
-                                    lastSavedOrRecoveredContent
-
-                        updateStatus()
-                        scheduleSyntaxHighlighting()
+                override fun beforeTextChanged(
+                    text: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
+                ) {
+                    if (!isUndoRedoAction) {
+                        previousText =
+                            text.toString()
                     }
                 }
+
+                override fun onTextChanged(
+                    text: CharSequence?,
+                    start: Int,
+                    before: Int,
+                    count: Int
+                ) {
+                    // No action required.
+                }
+
+                override fun afterTextChanged(
+                    text: Editable?
+                ) {
+                    if (!isUndoRedoAction) {
+                        undoStack.add(
+                            previousText
+                        )
+
+                        redoStack.clear()
+                    }
+
+                    hasUnsavedChanges =
+                        editorText.text.toString() !=
+                                lastSavedOrRecoveredContent
+
+                    removeSpellCheckUnderlines()
+
+                    updateStatus()
+
+                    /*
+                     * Re-detect language after the user
+                     * stops typing briefly.
+                     */
+                    scheduleSyntaxHighlighting()
+                }
+            }
+        )
+    }
+
+    private fun removeSpellCheckUnderlines() {
+        val editable = editorText.text
+
+        val suggestionSpans =
+            editable.getSpans(
+                0,
+                editable.length,
+                SuggestionSpan::class.java
             )
 
-        btnSave.setOnClickListener {
+        suggestionSpans.forEach { span ->
+            editable.removeSpan(span)
+        }
+    }
 
+    private fun initializeButtonListeners() {
+        btnSave.setOnClickListener {
             if (isReadOnly) {
                 return@setOnClickListener
             }
@@ -385,7 +364,6 @@ class EditorActivity : AppCompatActivity() {
         }
 
         btnSaveAs.setOnClickListener {
-
             if (!isReadOnly) {
                 showSaveAsDialog()
             }
@@ -396,63 +374,41 @@ class EditorActivity : AppCompatActivity() {
         }
 
         btnUndo.setOnClickListener {
-
             if (!isReadOnly) {
                 undoText()
             }
         }
 
         btnRedo.setOnClickListener {
-
             if (!isReadOnly) {
                 redoText()
             }
         }
 
         btnSearch.setOnClickListener {
-
             showSearchDialog()
         }
 
         btnReplace.setOnClickListener {
-
             if (!isReadOnly) {
                 showReplaceDialog()
             }
         }
 
         btnReadOnly.setOnClickListener {
-
             toggleReadOnlyMode()
         }
 
-        btnCreateVersion
-            .setOnClickListener {
+        btnCreateVersion.setOnClickListener {
+            showCreateVersionDialog()
+        }
 
-                showCreateVersionDialog()
-            }
-
-        btnVersionHistory
-            .setOnClickListener {
-
-                openVersionHistory()
-            }
-
-        updateReadOnlyInterface()
-        updateStatus()
-        scheduleSyntaxHighlighting()
-        checkForRecovery()
-
-        autoSaveHandler
-            .postDelayed(
-                autoSaveRunnable,
-                AUTO_SAVE_INTERVAL
-            )
+        btnVersionHistory.setOnClickListener {
+            openVersionHistory()
+        }
     }
 
-    private fun getTextEZFolder():
-            File {
-
+    private fun getTextEZFolder(): File {
         val folder =
             File(
                 filesDir,
@@ -466,62 +422,63 @@ class EditorActivity : AppCompatActivity() {
         return folder
     }
 
-    private fun isKotlinFile():
-            Boolean {
-
-        return currentFileName
-            .endsWith(
-                suffix = ".kt",
-                ignoreCase = true
-            )
-    }
-
-    private fun isMarkdownFile():
-            Boolean {
-
-        return currentFileName
-            .endsWith(
-                suffix = ".md",
-                ignoreCase = true
-            ) ||
-                currentFileName
-                    .endsWith(
-                        suffix = ".markdown",
-                        ignoreCase = true
-                    )
-    }
-
     private fun scheduleSyntaxHighlighting() {
+        syntaxHandler.removeCallbacks(
+            syntaxHighlightRunnable
+        )
 
-        syntaxHandler
-            .removeCallbacks(
-                syntaxHighlightRunnable
+        syntaxHandler.postDelayed(
+            syntaxHighlightRunnable,
+            SYNTAX_DETECTION_DELAY
+        )
+    }
+
+    private fun applyDetectedSyntaxHighlighting() {
+        val detectedLanguage =
+            LanguageDetector.detect(
+                fileName =
+                    currentFileName,
+
+                content =
+                    editorText.text.toString()
             )
 
-        if (
-            isKotlinFile() ||
-            isMarkdownFile()
-        ) {
-            syntaxHandler
-                .postDelayed(
-                    syntaxHighlightRunnable,
-                    SYNTAX_DELAY
-                )
-        } else {
-            KotlinSyntaxHighlighter
-                .clear(
+        when (detectedLanguage) {
+            LanguageDetector.Language.KOTLIN -> {
+                MarkdownSyntaxHighlighter.clear(
                     editorText.text
                 )
 
-            MarkdownSyntaxHighlighter
-                .clear(
+                KotlinSyntaxHighlighter.highlight(
                     editorText.text
                 )
+            }
+
+            LanguageDetector.Language.MARKDOWN -> {
+                KotlinSyntaxHighlighter.clear(
+                    editorText.text
+                )
+
+                MarkdownSyntaxHighlighter.highlight(
+                    editorText.text
+                )
+            }
+
+            LanguageDetector.Language.PLAIN_TEXT -> {
+                KotlinSyntaxHighlighter.clear(
+                    editorText.text
+                )
+
+                MarkdownSyntaxHighlighter.clear(
+                    editorText.text
+                )
+            }
         }
+
+        removeSpellCheckUnderlines()
     }
 
     private fun toggleReadOnlyMode() {
-
         isReadOnly =
             !isReadOnly
 
@@ -544,9 +501,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun updateReadOnlyInterface() {
-
         if (isReadOnly) {
-
             editorText.keyListener =
                 null
 
@@ -587,10 +542,10 @@ class EditorActivity : AppCompatActivity() {
             btnVersionHistory.isEnabled =
                 true
 
-            btnDelete.isEnabled = true
+            btnDelete.isEnabled =
+                true
 
         } else {
-
             editorText.keyListener =
                 originalKeyListener
 
@@ -617,8 +572,8 @@ class EditorActivity : AppCompatActivity() {
             btnSaveAs.isEnabled =
                 true
 
-            btnDelete.isEnabled = true
-
+            btnDelete.isEnabled =
+                true
 
             btnUndo.isEnabled =
                 true
@@ -641,7 +596,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun saveReadOnlyState() {
-
         val preferences =
             getSharedPreferences(
                 READ_ONLY_PREFERENCES,
@@ -658,7 +612,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun loadReadOnlyState() {
-
         val preferences =
             getSharedPreferences(
                 READ_ONLY_PREFERENCES,
@@ -674,7 +627,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun saveCurrentFile() {
-
         if (isReadOnly) {
             return
         }
@@ -687,8 +639,7 @@ class EditorActivity : AppCompatActivity() {
                 )
 
             val content =
-                editorText.text
-                    .toString()
+                editorText.text.toString()
 
             file.writeText(
                 content,
@@ -708,10 +659,9 @@ class EditorActivity : AppCompatActivity() {
             hasUnsavedChanges =
                 false
 
-            AutoSaveManager
-                .clearRecovery(
-                    this
-                )
+            AutoSaveManager.clearRecovery(
+                this
+            )
 
             scheduleSyntaxHighlighting()
 
@@ -724,7 +674,6 @@ class EditorActivity : AppCompatActivity() {
             ).show()
 
         } catch (exception: Exception) {
-
             Toast.makeText(
                 this,
                 getString(
@@ -736,7 +685,10 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showDeleteConfirmation() {
-        if (currentFileName == DEFAULT_FILE_NAME) {
+        if (
+            currentFileName ==
+            DEFAULT_FILE_NAME
+        ) {
             Toast.makeText(
                 this,
                 getString(
@@ -761,13 +713,17 @@ class EditorActivity : AppCompatActivity() {
                 )
             )
             .setPositiveButton(
-                getString(R.string.delete)
+                getString(
+                    R.string.delete
+                )
             ) { _, _ ->
 
                 deleteCurrentFile()
             }
             .setNegativeButton(
-                getString(R.string.cancel),
+                getString(
+                    R.string.cancel
+                ),
                 null
             )
             .show()
@@ -775,10 +731,13 @@ class EditorActivity : AppCompatActivity() {
 
     private fun deleteCurrentFile() {
         try {
+            val deletedFileName =
+                currentFileName
+
             val fileToDelete =
                 File(
                     getTextEZFolder(),
-                    currentFileName
+                    deletedFileName
                 )
 
             if (
@@ -790,10 +749,12 @@ class EditorActivity : AppCompatActivity() {
             }
 
             val historyDeleted =
-                VersionManager.deleteVersionHistory(
-                    context = this,
-                    fileName = currentFileName
-                )
+                VersionManager
+                    .deleteVersionHistory(
+                        context = this,
+                        fileName =
+                            deletedFileName
+                    )
 
             if (!historyDeleted) {
                 showDeleteFailed()
@@ -801,11 +762,11 @@ class EditorActivity : AppCompatActivity() {
             }
 
             removeFromRecentFiles(
-                currentFileName
+                deletedFileName
             )
 
             removeReadOnlyState(
-                currentFileName
+                deletedFileName
             )
 
             AutoSaveManager.clearRecovery(
@@ -832,13 +793,16 @@ class EditorActivity : AppCompatActivity() {
     ) {
         val preferences =
             getSharedPreferences(
-                RecentFilesManager.PREFERENCES_NAME,
+                RecentFilesManager
+                    .PREFERENCES_NAME,
                 MODE_PRIVATE
             )
 
         val updatedRecentFiles =
             RecentFilesManager
-                .getRecentFiles(preferences)
+                .getRecentFiles(
+                    preferences
+                )
                 .filterNot {
                     it == fileName
                 }
@@ -867,11 +831,13 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun resetEditorAfterDelete() {
-        isUndoRedoAction = true
+        isUndoRedoAction =
+            true
 
         editorText.setText("")
 
-        isUndoRedoAction = false
+        isUndoRedoAction =
+            false
 
         currentFileName =
             DEFAULT_FILE_NAME
@@ -879,16 +845,20 @@ class EditorActivity : AppCompatActivity() {
         txtFileName.text =
             currentFileName
 
-        isReadOnly = false
+        isReadOnly =
+            false
 
         undoStack.clear()
         redoStack.clear()
 
-        previousText = ""
+        previousText =
+            ""
 
-        lastSavedOrRecoveredContent = ""
+        lastSavedOrRecoveredContent =
+            ""
 
-        hasUnsavedChanges = false
+        hasUnsavedChanges =
+            false
 
         updateReadOnlyInterface()
         updateStatus()
@@ -906,7 +876,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showSaveAsDialog() {
-
         if (isReadOnly) {
             return
         }
@@ -948,10 +917,7 @@ class EditorActivity : AppCompatActivity() {
                         .toString()
                         .trim()
 
-                if (
-                    enteredName
-                        .isBlank()
-                ) {
+                if (enteredName.isBlank()) {
                     Toast.makeText(
                         this,
                         getString(
@@ -995,8 +961,7 @@ class EditorActivity : AppCompatActivity() {
 
                 if (
                     targetFile.exists() &&
-                    finalName !=
-                    currentFileName
+                    finalName != currentFileName
                 ) {
                     showOverwriteConfirmation(
                         finalName
@@ -1014,6 +979,13 @@ class EditorActivity : AppCompatActivity() {
                     saveReadOnlyState()
                     updateReadOnlyInterface()
                     saveCurrentFile()
+
+                    /*
+                     * Re-run highlighting because the
+                     * newly saved extension may identify
+                     * Kotlin or Markdown.
+                     */
+                    scheduleSyntaxHighlighting()
                 }
             }
             .setNegativeButton(
@@ -1028,7 +1000,6 @@ class EditorActivity : AppCompatActivity() {
     private fun sanitizeFileName(
         fileName: String
     ): String {
-
         return fileName.replace(
             Regex(
                 """[\\/:*?"<>|]"""
@@ -1040,7 +1011,6 @@ class EditorActivity : AppCompatActivity() {
     private fun addDefaultExtension(
         fileName: String
     ): String {
-
         return if (
             fileName.contains(".")
         ) {
@@ -1083,6 +1053,7 @@ class EditorActivity : AppCompatActivity() {
                 saveReadOnlyState()
                 updateReadOnlyInterface()
                 saveCurrentFile()
+                scheduleSyntaxHighlighting()
             }
             .setNegativeButton(
                 getString(
@@ -1094,7 +1065,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun loadCurrentFile() {
-
         try {
             val file =
                 File(
@@ -1152,7 +1122,6 @@ class EditorActivity : AppCompatActivity() {
             scheduleSyntaxHighlighting()
 
         } catch (exception: Exception) {
-
             isUndoRedoAction =
                 false
 
@@ -1167,7 +1136,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showCreateVersionDialog() {
-
         if (
             currentFileName ==
             DEFAULT_FILE_NAME
@@ -1187,10 +1155,11 @@ class EditorActivity : AppCompatActivity() {
         val input =
             EditText(this).apply {
 
-                hint = getString(
-                    R.string
-                        .version_name_hint
-                )
+                hint =
+                    getString(
+                        R.string
+                            .version_name_hint
+                    )
             }
 
         AlertDialog.Builder(this)
@@ -1211,9 +1180,7 @@ class EditorActivity : AppCompatActivity() {
                         .toString()
                         .trim()
 
-                if (
-                    versionName.isBlank()
-                ) {
+                if (versionName.isBlank()) {
                     Toast.makeText(
                         this,
                         getString(
@@ -1243,17 +1210,15 @@ class EditorActivity : AppCompatActivity() {
         versionName: String
     ) {
         val version =
-            VersionManager
-                .createVersion(
-                    context = this,
-                    fileName =
-                        currentFileName,
-                    content =
-                        editorText.text
-                            .toString(),
-                    versionName =
-                        versionName
-                )
+            VersionManager.createVersion(
+                context = this,
+                fileName =
+                    currentFileName,
+                content =
+                    editorText.text.toString(),
+                versionName =
+                    versionName
+            )
 
         if (version != null) {
             Toast.makeText(
@@ -1277,7 +1242,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun openVersionHistory() {
-
         if (
             currentFileName ==
             DEFAULT_FILE_NAME
@@ -1308,14 +1272,12 @@ class EditorActivity : AppCompatActivity() {
                 )
             }
 
-        versionHistoryLauncher
-            .launch(
-                historyIntent
-            )
+        versionHistoryLauncher.launch(
+            historyIntent
+        )
     }
 
     private fun saveRecoveryIfNeeded() {
-
         if (!::editorText.isInitialized) {
             return
         }
@@ -1328,18 +1290,16 @@ class EditorActivity : AppCompatActivity() {
         }
 
         val content =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         val recoverySaved =
-            AutoSaveManager
-                .saveRecovery(
-                    context = this,
-                    fileName =
-                        currentFileName,
-                    content =
-                        content
-                )
+            AutoSaveManager.saveRecovery(
+                context = this,
+                fileName =
+                    currentFileName,
+                content =
+                    content
+            )
 
         if (recoverySaved) {
             lastSavedOrRecoveredContent =
@@ -1360,7 +1320,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun checkForRecovery() {
-
         if (
             !AutoSaveManager
                 .hasRecovery(this)
@@ -1375,8 +1334,7 @@ class EditorActivity : AppCompatActivity() {
                 ) ?: return
 
         val currentContent =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         if (
             recovery.fileName ==
@@ -1384,10 +1342,9 @@ class EditorActivity : AppCompatActivity() {
             recovery.content ==
             currentContent
         ) {
-            AutoSaveManager
-                .clearRecovery(
-                    this
-                )
+            AutoSaveManager.clearRecovery(
+                this
+            )
 
             return
         }
@@ -1462,14 +1419,12 @@ class EditorActivity : AppCompatActivity() {
                 )
             ) { _, _ ->
 
-                AutoSaveManager
-                    .clearRecovery(
-                        this
-                    )
+                AutoSaveManager.clearRecovery(
+                    this
+                )
 
                 lastSavedOrRecoveredContent =
-                    editorText.text
-                        .toString()
+                    editorText.text.toString()
 
                 hasUnsavedChanges =
                     false
@@ -1510,15 +1465,13 @@ class EditorActivity : AppCompatActivity() {
                     .MAX_RECENT_FILES
             )
 
-        RecentFilesManager
-            .saveRecentFiles(
-                preferences,
-                limitedFiles
-            )
+        RecentFilesManager.saveRecentFiles(
+            preferences,
+            limitedFiles
+        )
     }
 
     private fun undoText() {
-
         if (isReadOnly) {
             return
         }
@@ -1539,8 +1492,7 @@ class EditorActivity : AppCompatActivity() {
             true
 
         val currentText =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         redoStack.add(
             currentText
@@ -1571,7 +1523,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun redoText() {
-
         if (isReadOnly) {
             return
         }
@@ -1592,8 +1543,7 @@ class EditorActivity : AppCompatActivity() {
             true
 
         val currentText =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         undoStack.add(
             currentText
@@ -1624,7 +1574,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showSearchDialog() {
-
         val input =
             EditText(this)
 
@@ -1647,8 +1596,7 @@ class EditorActivity : AppCompatActivity() {
             ) { _, _ ->
 
                 searchText(
-                    input.text
-                        .toString()
+                    input.text.toString()
                 )
             }
             .setNegativeButton(
@@ -1668,8 +1616,7 @@ class EditorActivity : AppCompatActivity() {
         }
 
         val content =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         val startPosition =
             editorText.selectionEnd
@@ -1711,7 +1658,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showReplaceDialog() {
-
         if (isReadOnly) {
             return
         }
@@ -1733,17 +1679,19 @@ class EditorActivity : AppCompatActivity() {
         val searchInput =
             EditText(this).apply {
 
-                hint = getString(
-                    R.string.search_word
-                )
+                hint =
+                    getString(
+                        R.string.search_word
+                    )
             }
 
         val replaceInput =
             EditText(this).apply {
 
-                hint = getString(
-                    R.string.replace_with
-                )
+                hint =
+                    getString(
+                        R.string.replace_with
+                    )
             }
 
         layout.addView(
@@ -1768,11 +1716,8 @@ class EditorActivity : AppCompatActivity() {
             ) { _, _ ->
 
                 replaceOne(
-                    searchInput.text
-                        .toString(),
-
-                    replaceInput.text
-                        .toString()
+                    searchInput.text.toString(),
+                    replaceInput.text.toString()
                 )
             }
             .setNeutralButton(
@@ -1782,11 +1727,8 @@ class EditorActivity : AppCompatActivity() {
             ) { _, _ ->
 
                 replaceAll(
-                    searchInput.text
-                        .toString(),
-
-                    replaceInput.text
-                        .toString()
+                    searchInput.text.toString(),
+                    replaceInput.text.toString()
                 )
             }
             .setNegativeButton(
@@ -1810,8 +1752,7 @@ class EditorActivity : AppCompatActivity() {
         }
 
         val content =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         val selectionStart =
             editorText.selectionStart
@@ -1831,12 +1772,11 @@ class EditorActivity : AppCompatActivity() {
                 ignoreCase = true
             )
         ) {
-            editorText.text
-                .replace(
-                    selectionStart,
-                    selectionEnd,
-                    replacement
-                )
+            editorText.text.replace(
+                selectionStart,
+                selectionEnd,
+                replacement
+            )
 
             return
         }
@@ -1859,12 +1799,11 @@ class EditorActivity : AppCompatActivity() {
             return
         }
 
-        editorText.text
-            .replace(
-                index,
-                index + search.length,
-                replacement
-            )
+        editorText.text.replace(
+            index,
+            index + search.length,
+            replacement
+        )
     }
 
     private fun replaceAll(
@@ -1879,8 +1818,7 @@ class EditorActivity : AppCompatActivity() {
         }
 
         val content =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         if (
             !content.contains(
@@ -1922,10 +1860,8 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun updateStatus() {
-
         val text =
-            editorText.text
-                .toString()
+            editorText.text.toString()
 
         val lines =
             if (text.isEmpty()) {
@@ -1951,23 +1887,18 @@ class EditorActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-
         saveRecoveryIfNeeded()
-
         super.onPause()
     }
 
     override fun onDestroy() {
+        syntaxHandler.removeCallbacks(
+            syntaxHighlightRunnable
+        )
 
-        syntaxHandler
-            .removeCallbacks(
-                syntaxHighlightRunnable
-            )
-
-        autoSaveHandler
-            .removeCallbacks(
-                autoSaveRunnable
-            )
+        autoSaveHandler.removeCallbacks(
+            autoSaveRunnable
+        )
 
         super.onDestroy()
     }

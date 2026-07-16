@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <string name="app_name">TextEZ</string>
     <string name="app_subtitle">Mobile Text Editor</string>
@@ -21,14 +21,10 @@
     <string name="search">Search</string>
     <string name="replace">Replace</string>
 
-    <string name="editor_hint">Start typing here...</string>
+    <string name="editor_hint">Start typing here…</string>
 
     <string name="status_default">
         Lines: 1 | Characters: 0
-    </string>
-
-    <string name="status_format">
-        Lines: %1$d | Characters: %2$d
     </string>
 
     <string name="status_read_only">
@@ -146,7 +142,9 @@
         Please enter a version name
     </string>
 
-    <string name="version_created">
+    <string
+        name="version_created"
+        tools:ignore="PluralsCandidate">
         Version %1$d created successfully
     </string>
 
@@ -181,7 +179,9 @@
         17 Jul 2026, 10:30 AM
     </string>
 
-    <string name="version_preview_title">
+    <string
+        name="version_preview_title"
+        tools:ignore="PluralsCandidate">
         Version %1$d Preview
     </string>
 
@@ -194,7 +194,9 @@
     <string name="preview">Preview</string>
     <string name="compare">Compare</string>
 
-    <string name="version_actions_title">
+    <string
+        name="version_actions_title"
+        tools:ignore="PluralsCandidate">
         Version %1$d Actions
     </string>
 

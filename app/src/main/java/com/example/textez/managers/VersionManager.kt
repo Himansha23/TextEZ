@@ -81,15 +81,123 @@ object VersionManager {
                 )
             }
 
-            metadataFile.outputStream().use {
+            metadataFile.outputStream().use { output ->
                 properties.store(
-                    it,
+                    output,
                     "TextEZ version metadata"
                 )
             }
 
             Version(
                 versionNumber = nextVersionNumber,
+                versionName = versionName,
+                fileName = fileName,
+                snapshotFileName = snapshotFileName,
+                createdAt = createdAt
+            )
+
+        } catch (exception: Exception) {
+            null
+        }
+    }
+
+    fun getVersions(
+        context: Context,
+        fileName: String
+    ): List<Version> {
+        return try {
+            val folder = getVersionFolder(
+                context,
+                fileName
+            )
+
+            folder.listFiles()
+                ?.filter { file ->
+                    file.isFile &&
+                            file.name.endsWith(
+                                METADATA_EXTENSION
+                            )
+                }
+                ?.mapNotNull { metadataFile ->
+                    readVersionMetadata(metadataFile)
+                }
+                ?.sortedByDescending {
+                    it.versionNumber
+                }
+                .orEmpty()
+
+        } catch (exception: Exception) {
+            emptyList()
+        }
+    }
+
+    fun loadVersionContent(
+        context: Context,
+        version: Version
+    ): String? {
+        return try {
+            val folder = getVersionFolder(
+                context,
+                version.fileName
+            )
+
+            val snapshotFile = File(
+                folder,
+                version.snapshotFileName
+            )
+
+            if (!snapshotFile.exists()) {
+                return null
+            }
+
+            snapshotFile.readText(
+                Charsets.UTF_8
+            )
+
+        } catch (exception: Exception) {
+            null
+        }
+    }
+
+    private fun readVersionMetadata(
+        metadataFile: File
+    ): Version? {
+        return try {
+            val properties = Properties()
+
+            metadataFile.inputStream().use { input ->
+                properties.load(input)
+            }
+
+            val versionNumber =
+                properties.getProperty(
+                    "version_number"
+                )?.toIntOrNull()
+                    ?: return null
+
+            val versionName =
+                properties.getProperty(
+                    "version_name"
+                ).orEmpty()
+
+            val fileName =
+                properties.getProperty(
+                    "file_name"
+                ).orEmpty()
+
+            val snapshotFileName =
+                properties.getProperty(
+                    "snapshot_file"
+                ).orEmpty()
+
+            val createdAt =
+                properties.getProperty(
+                    "created_at"
+                )?.toLongOrNull()
+                    ?: 0L
+
+            Version(
+                versionNumber = versionNumber,
                 versionName = versionName,
                 fileName = fileName,
                 snapshotFileName = snapshotFileName,
@@ -136,9 +244,9 @@ object VersionManager {
     ): Int {
         val existingNumbers = folder
             .listFiles()
-            ?.filter {
-                it.isFile &&
-                        it.name.endsWith(
+            ?.filter { file ->
+                file.isFile &&
+                        file.name.endsWith(
                             METADATA_EXTENSION
                         )
             }
@@ -153,6 +261,8 @@ object VersionManager {
             }
             .orEmpty()
 
-        return (existingNumbers.maxOrNull() ?: 0) + 1
+        return (
+                existingNumbers.maxOrNull() ?: 0
+                ) + 1
     }
 }

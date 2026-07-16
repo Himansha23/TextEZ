@@ -45,4 +45,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 
+    implementation(libs.androidx.recyclerview)
+
 }

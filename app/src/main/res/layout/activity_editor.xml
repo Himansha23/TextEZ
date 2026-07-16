@@ -115,6 +115,15 @@
                 android:text="@string/create_version"
                 android:textColor="#111827" />
 
+            <Button
+                android:id="@+id/btnVersionHistory"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:minWidth="100dp"
+                android:text="@string/history"
+                android:textColor="#111827" />
+
         </LinearLayout>
 
     </HorizontalScrollView>

@@ -1,6 +1,7 @@
 package com.example.textez.activities
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -49,6 +50,7 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var btnReplace: Button
     private lateinit var btnReadOnly: Button
     private lateinit var btnCreateVersion: Button
+    private lateinit var btnVersionHistory: Button
 
     private var originalKeyListener: KeyListener? = null
     private var isReadOnly = false
@@ -137,6 +139,7 @@ class EditorActivity : AppCompatActivity() {
         btnReplace = findViewById(R.id.btnReplace)
         btnReadOnly = findViewById(R.id.btnReadOnly)
         btnCreateVersion = findViewById(R.id.btnCreateVersion)
+        btnVersionHistory = findViewById(R.id.btnVersionHistory)
 
         originalKeyListener = editorText.keyListener
 
@@ -248,6 +251,10 @@ class EditorActivity : AppCompatActivity() {
             showCreateVersionDialog()
         }
 
+        btnVersionHistory.setOnClickListener {
+            openVersionHistory()
+        }
+
         updateReadOnlyInterface()
         updateStatus()
         scheduleSyntaxHighlighting()
@@ -349,6 +356,7 @@ class EditorActivity : AppCompatActivity() {
 
             btnSearch.isEnabled = true
             btnCreateVersion.isEnabled = true
+            btnVersionHistory.isEnabled = true
 
         } else {
             editorText.keyListener =
@@ -369,6 +377,7 @@ class EditorActivity : AppCompatActivity() {
             btnSearch.isEnabled = true
             btnReplace.isEnabled = true
             btnCreateVersion.isEnabled = true
+            btnVersionHistory.isEnabled = true
         }
     }
 
@@ -526,10 +535,12 @@ class EditorActivity : AppCompatActivity() {
                     )
                 } else {
                     currentFileName = finalName
+
                     txtFileName.text =
                         currentFileName
 
                     isReadOnly = false
+
                     saveReadOnlyState()
                     updateReadOnlyInterface()
 
@@ -580,10 +591,12 @@ class EditorActivity : AppCompatActivity() {
             ) { _, _ ->
 
                 currentFileName = fileName
+
                 txtFileName.text =
                     currentFileName
 
                 isReadOnly = false
+
                 saveReadOnlyState()
                 updateReadOnlyInterface()
 
@@ -740,6 +753,32 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun openVersionHistory() {
+        if (currentFileName == DEFAULT_FILE_NAME) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.save_file_before_version
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
+
+        val historyIntent = Intent(
+            this,
+            VersionHistoryActivity::class.java
+        ).apply {
+            putExtra(
+                VersionHistoryActivity.EXTRA_FILE_NAME,
+                currentFileName
+            )
+        }
+
+        startActivity(historyIntent)
+    }
+
     private fun saveRecoveryIfNeeded() {
         if (!::editorText.isInitialized) {
             return
@@ -788,10 +827,8 @@ class EditorActivity : AppCompatActivity() {
             editorText.text.toString()
 
         if (
-            recovery.fileName ==
-            currentFileName &&
-            recovery.content ==
-            currentContent
+            recovery.fileName == currentFileName &&
+            recovery.content == currentContent
         ) {
             AutoSaveManager.clearRecovery(this)
             return
@@ -877,8 +914,7 @@ class EditorActivity : AppCompatActivity() {
     ) {
         val preferences =
             getSharedPreferences(
-                RecentFilesManager
-                    .PREFERENCES_NAME,
+                RecentFilesManager.PREFERENCES_NAME,
                 MODE_PRIVATE
             )
 
@@ -896,8 +932,7 @@ class EditorActivity : AppCompatActivity() {
 
         val limitedFiles =
             currentRecentFiles.take(
-                RecentFilesManager
-                    .MAX_RECENT_FILES
+                RecentFilesManager.MAX_RECENT_FILES
             )
 
         RecentFilesManager.saveRecentFiles(
@@ -944,8 +979,7 @@ class EditorActivity : AppCompatActivity() {
         isUndoRedoAction = false
 
         hasUnsavedChanges =
-            previous !=
-                    lastSavedOrRecoveredContent
+            previous != lastSavedOrRecoveredContent
 
         updateStatus()
         scheduleSyntaxHighlighting()
@@ -989,8 +1023,7 @@ class EditorActivity : AppCompatActivity() {
         isUndoRedoAction = false
 
         hasUnsavedChanges =
-            next !=
-                    lastSavedOrRecoveredContent
+            next != lastSavedOrRecoveredContent
 
         updateStatus()
         scheduleSyntaxHighlighting()
@@ -1240,8 +1273,7 @@ class EditorActivity : AppCompatActivity() {
         )
 
         hasUnsavedChanges =
-            newContent !=
-                    lastSavedOrRecoveredContent
+            newContent != lastSavedOrRecoveredContent
 
         scheduleSyntaxHighlighting()
     }

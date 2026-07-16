@@ -68,4 +68,17 @@
     <string name="version_create_failed">Unable to create version</string>
     <string name="save_file_before_version">Save the file before creating a version</string>
 
+    <string name="history">History</string>
+    <string name="version_history">Version History</string>
+    <string name="no_versions">No versions created for this file</string>
+
+    <string name="version_number_format">Version %1$d</string>
+    <string name="version_number_preview">Version 1</string>
+    <string name="version_name_preview">Initial version</string>
+    <string name="version_date_preview">17 Jul 2026, 10:30 AM</string>
+
+    <string name="version_preview_title">Version %1$d Preview</string>
+    <string name="version_load_failed">Unable to load this version</string>
+    <string name="close">Close</string>
+
 </resources>

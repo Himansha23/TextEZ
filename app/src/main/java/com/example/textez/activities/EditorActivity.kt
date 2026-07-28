@@ -25,11 +25,16 @@ import com.example.textez.storage.RecentFilesManager
 import java.io.File
 import android.text.InputType
 import android.text.style.SuggestionSpan
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 
 class EditorActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_FILE_NAME = "file_name"
+
+        const val EXTRA_EXTERNAL_FILE_URI = "external_file_uri"
 
         private const val DEFAULT_FILE_NAME =
             "Untitled.txt"
@@ -67,7 +72,9 @@ class EditorActivity : AppCompatActivity() {
 
     private var isReadOnly =
         false
-
+    //new
+    private var externalFileUri: Uri? = null
+    private var isExternalFile = false
     private val undoStack =
         mutableListOf<String>()
 
@@ -104,7 +111,16 @@ class EditorActivity : AppCompatActivity() {
                         ) == true
 
             if (rolledBack) {
-                loadCurrentFile()
+                if (isExternalFile) {
+                    externalFileUri?.let {
+                        loadExternalFile(
+                            it
+                        )
+                    }
+                } else {
+                    loadCurrentFile()
+                }
+
                 loadReadOnlyState()
                 updateReadOnlyInterface()
                 updateStatus()
@@ -170,7 +186,9 @@ class EditorActivity : AppCompatActivity() {
         updateReadOnlyInterface()
         updateStatus()
         scheduleSyntaxHighlighting()
-        checkForRecovery()
+        if (!isExternalFile) {
+            checkForRecovery()
+        }
 
         autoSaveHandler.postDelayed(
             autoSaveRunnable,
@@ -255,7 +273,60 @@ class EditorActivity : AppCompatActivity() {
         )
     }
 
+    private fun getExternalFileName(uri: Uri): String {
+        var fileName = "ExternalFile.txt"
+
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+
+            val nameColumnIndex =
+                cursor.getColumnIndex(
+                    OpenableColumns.DISPLAY_NAME
+                )
+
+            if (
+                nameColumnIndex >= 0 &&
+                cursor.moveToFirst()
+            ) {
+                fileName =
+                    cursor.getString(nameColumnIndex)
+                        ?: fileName
+            }
+        }
+
+        return fileName
+    }
+
     private fun initializeFile() {
+        val externalUriString =
+            intent.getStringExtra(
+                EXTRA_EXTERNAL_FILE_URI
+            )
+
+        if (!externalUriString.isNullOrBlank()) {
+            val uri =
+                Uri.parse(
+                    externalUriString
+                )
+
+            externalFileUri =
+                uri
+
+            isExternalFile =
+                true
+
+            loadExternalFile(
+                uri
+            )
+
+            return
+        }
+
         val openedFileName =
             intent.getStringExtra(
                 EXTRA_FILE_NAME
@@ -276,6 +347,90 @@ class EditorActivity : AppCompatActivity() {
 
         lastSavedOrRecoveredContent =
             editorText.text.toString()
+    }
+    private fun updateDisplayedFileName(
+        fileName: String
+    ) {
+        txtFileName.text =
+            fileName
+    }
+
+    private fun loadExternalFile(
+        uri: Uri
+    ) {
+        try {
+            val content =
+                contentResolver
+                    .openInputStream(
+                        uri
+                    )
+                    ?.bufferedReader(
+                        Charsets.UTF_8
+                    )
+                    ?.use { reader ->
+                        reader.readText()
+                    }
+
+            if (content == null) {
+                Toast.makeText(
+                    this,
+                    "Unable to read the selected file.",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                return
+            }
+
+            isUndoRedoAction =
+                true
+
+            editorText.setText(
+                content
+            )
+
+            editorText.setSelection(
+                content.length
+            )
+
+            isUndoRedoAction =
+                false
+
+            currentFileName =
+                getExternalFileName(
+                    uri
+                )
+
+            updateDisplayedFileName(
+                currentFileName
+            )
+
+            undoStack.clear()
+            redoStack.clear()
+
+            previousText =
+                content
+
+            lastSavedOrRecoveredContent =
+                content
+
+            hasUnsavedChanges =
+                false
+
+            loadReadOnlyState()
+            updateReadOnlyInterface()
+            updateStatus()
+            scheduleSyntaxHighlighting()
+
+        } catch (exception: Exception) {
+            isUndoRedoAction =
+                false
+
+            Toast.makeText(
+                this,
+                "Unable to open file: ${exception.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun initializeTextWatcher() {
@@ -537,10 +692,10 @@ class EditorActivity : AppCompatActivity() {
                 true
 
             btnCreateVersion.isEnabled =
-                true
+                !isExternalFile
 
             btnVersionHistory.isEnabled =
-                true
+                !isExternalFile
 
             btnDelete.isEnabled =
                 true
@@ -588,11 +743,20 @@ class EditorActivity : AppCompatActivity() {
                 true
 
             btnCreateVersion.isEnabled =
-                true
+                !isExternalFile
 
             btnVersionHistory.isEnabled =
-                true
+                !isExternalFile
         }
+    }
+
+    private fun readOnlyPreferenceKey(): String {
+        val identifier =
+            externalFileUri?.toString()
+                ?: currentFileName
+
+        return READ_ONLY_KEY_PREFIX +
+                identifier
     }
 
     private fun saveReadOnlyState() {
@@ -604,8 +768,7 @@ class EditorActivity : AppCompatActivity() {
 
         preferences.edit()
             .putBoolean(
-                READ_ONLY_KEY_PREFIX +
-                        currentFileName,
+                readOnlyPreferenceKey(),
                 isReadOnly
             )
             .apply()
@@ -620,14 +783,21 @@ class EditorActivity : AppCompatActivity() {
 
         isReadOnly =
             preferences.getBoolean(
-                READ_ONLY_KEY_PREFIX +
-                        currentFileName,
+                readOnlyPreferenceKey(),
                 false
             )
     }
 
     private fun saveCurrentFile() {
         if (isReadOnly) {
+            return
+        }
+
+        if (
+            isExternalFile &&
+            externalFileUri != null
+        ) {
+            saveExternalFile()
             return
         }
 
@@ -684,6 +854,79 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun saveExternalFile() {
+        val uri =
+            externalFileUri
+
+        if (uri == null) {
+            Toast.makeText(
+                this,
+                "The external file is no longer available.",
+                Toast.LENGTH_LONG
+            ).show()
+
+            return
+        }
+
+        try {
+            val outputStream =
+                contentResolver.openOutputStream(
+                    uri,
+                    "wt"
+                )
+
+            if (outputStream == null) {
+                Toast.makeText(
+                    this,
+                    "This file cannot be edited. Use Save As to create a TextEZ copy.",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                return
+            }
+
+            val content =
+                editorText.text.toString()
+
+            outputStream
+                .bufferedWriter(
+                    Charsets.UTF_8
+                )
+                .use { writer ->
+                    writer.write(
+                        content
+                    )
+                }
+
+            lastSavedOrRecoveredContent =
+                content
+
+            hasUnsavedChanges =
+                false
+
+            AutoSaveManager.clearRecovery(
+                this
+            )
+
+            scheduleSyntaxHighlighting()
+
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.file_saved
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+        } catch (exception: Exception) {
+            Toast.makeText(
+                this,
+                "This file is read-only or unavailable. Use Save As to create a TextEZ copy.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     private fun showDeleteConfirmation() {
         if (
             currentFileName ==
@@ -730,6 +973,14 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun deleteCurrentFile() {
+        if (
+            isExternalFile &&
+            externalFileUri != null
+        ) {
+            deleteExternalFile()
+            return
+        }
+
         try {
             val deletedFileName =
                 currentFileName
@@ -788,6 +1039,60 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun deleteExternalFile() {
+        val uri =
+            externalFileUri
+
+        if (uri == null) {
+            showDeleteFailed()
+            return
+        }
+
+        try {
+            val deleted =
+                DocumentsContract.deleteDocument(
+                    contentResolver,
+                    uri
+                )
+
+            if (!deleted) {
+                showDeleteFailed()
+                return
+            }
+
+            VersionManager.deleteVersionHistory(
+                context = this,
+                fileName =
+                    currentFileName
+            )
+
+            removeReadOnlyState(
+                currentFileName
+            )
+
+            AutoSaveManager.clearRecovery(
+                this
+            )
+
+            resetEditorAfterDelete()
+
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.file_deleted
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+        } catch (exception: Exception) {
+            Toast.makeText(
+                this,
+                "This provider does not allow TextEZ to delete the file.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     private fun removeFromRecentFiles(
         fileName: String
     ) {
@@ -841,6 +1146,12 @@ class EditorActivity : AppCompatActivity() {
 
         currentFileName =
             DEFAULT_FILE_NAME
+
+        externalFileUri =
+            null
+
+        isExternalFile =
+            false
 
         txtFileName.text =
             currentFileName
@@ -970,6 +1281,12 @@ class EditorActivity : AppCompatActivity() {
                     currentFileName =
                         finalName
 
+                    externalFileUri =
+                        null
+
+                    isExternalFile =
+                        false
+
                     txtFileName.text =
                         currentFileName
 
@@ -1043,6 +1360,12 @@ class EditorActivity : AppCompatActivity() {
 
                 currentFileName =
                     fileName
+
+                externalFileUri =
+                    null
+
+                isExternalFile =
+                    false
 
                 txtFileName.text =
                     currentFileName
@@ -1136,6 +1459,16 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showCreateVersionDialog() {
+        if (isExternalFile) {
+            Toast.makeText(
+                this,
+                "Use Save As to create a TextEZ copy before creating versions.",
+                Toast.LENGTH_LONG
+            ).show()
+
+            return
+        }
+
         if (
             currentFileName ==
             DEFAULT_FILE_NAME
@@ -1242,6 +1575,16 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun openVersionHistory() {
+        if (isExternalFile) {
+            Toast.makeText(
+                this,
+                "Use Save As to create a TextEZ copy before opening version history.",
+                Toast.LENGTH_LONG
+            ).show()
+
+            return
+        }
+
         if (
             currentFileName ==
             DEFAULT_FILE_NAME

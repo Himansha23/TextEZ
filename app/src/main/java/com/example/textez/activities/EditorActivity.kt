@@ -75,6 +75,7 @@ class EditorActivity : AppCompatActivity() {
     //new
     private var externalFileUri: Uri? = null
     private var isExternalFile = false
+    private var pendingCreateFileName: String? = null
     private val undoStack =
         mutableListOf<String>()
 
@@ -96,6 +97,49 @@ class EditorActivity : AppCompatActivity() {
     private var hasUnsavedChanges =
         false
 
+    private val createDocumentLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.CreateDocument(
+                "text/plain"
+            )
+        ) { uri: Uri? ->
+
+            if (uri == null) {
+                pendingCreateFileName = null
+                return@registerForActivityResult
+            }
+
+            persistDocumentPermission(uri)
+
+            externalFileUri = uri
+            isExternalFile = true
+
+            val createdDisplayName =
+                getExternalFileName(uri)
+
+            currentFileName =
+                if (createdDisplayName == "ExternalFile.txt") {
+                    pendingCreateFileName ?: createdDisplayName
+                } else {
+                    createdDisplayName
+                }
+
+            pendingCreateFileName = null
+
+            updateDisplayedFileName(
+                currentFileName
+            )
+
+            isReadOnly = false
+
+            saveReadOnlyState()
+            updateReadOnlyInterface()
+
+            saveExternalFile(
+                showSuccessMessage = true
+            )
+        }
+
     private val versionHistoryLauncher =
         registerForActivityResult(
             ActivityResultContracts
@@ -112,11 +156,7 @@ class EditorActivity : AppCompatActivity() {
 
             if (rolledBack) {
                 if (isExternalFile) {
-                    externalFileUri?.let {
-                        loadExternalFile(
-                            it
-                        )
-                    }
+                    loadRestoredExternalContent()
                 } else {
                     loadCurrentFile()
                 }
@@ -302,6 +342,107 @@ class EditorActivity : AppCompatActivity() {
         return fileName
     }
 
+    private fun persistDocumentPermission(
+        uri: Uri
+    ) {
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+            // Some providers only grant temporary access.
+        }
+    }
+
+    private fun addExternalFileToRecent(
+        uri: Uri
+    ) {
+        val preferences =
+            getSharedPreferences(
+                RecentFilesManager.PREFERENCES_NAME,
+                MODE_PRIVATE
+            )
+
+        RecentFilesManager.addExternalFile(
+            preferences = preferences,
+            displayName = currentFileName,
+            uriString = uri.toString()
+        )
+    }
+
+    private fun syncExternalMirror(
+        content: String
+    ): Boolean {
+        return try {
+            val mirrorFile =
+                File(
+                    getTextEZFolder(),
+                    currentFileName
+                )
+
+            mirrorFile.writeText(
+                content,
+                Charsets.UTF_8
+            )
+
+            true
+        } catch (exception: Exception) {
+            false
+        }
+    }
+
+    private fun loadRestoredExternalContent() {
+        val restoredContent =
+            VersionManager.loadCurrentFileContent(
+                context = this,
+                fileName = currentFileName
+            )
+
+        if (restoredContent == null) {
+            Toast.makeText(
+                this,
+                getString(
+                    R.string.rollback_failed
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
+
+        isUndoRedoAction = true
+
+        editorText.setText(
+            restoredContent
+        )
+
+        editorText.setSelection(
+            restoredContent.length
+        )
+
+        isUndoRedoAction = false
+
+        undoStack.clear()
+        redoStack.clear()
+
+        previousText =
+            restoredContent
+
+        lastSavedOrRecoveredContent =
+            restoredContent
+
+        hasUnsavedChanges = false
+
+        saveExternalFile(
+            showSuccessMessage = false
+        )
+
+        updateStatus()
+        scheduleSyntaxHighlighting()
+    }
+
     private fun initializeFile() {
         val externalUriString =
             intent.getStringExtra(
@@ -415,6 +556,14 @@ class EditorActivity : AppCompatActivity() {
 
             hasUnsavedChanges =
                 false
+
+            syncExternalMirror(
+                content
+            )
+
+            addExternalFileToRecent(
+                uri
+            )
 
             loadReadOnlyState()
             updateReadOnlyInterface()
@@ -692,10 +841,10 @@ class EditorActivity : AppCompatActivity() {
                 true
 
             btnCreateVersion.isEnabled =
-                !isExternalFile
+                true
 
             btnVersionHistory.isEnabled =
-                !isExternalFile
+                true
 
             btnDelete.isEnabled =
                 true
@@ -743,10 +892,10 @@ class EditorActivity : AppCompatActivity() {
                 true
 
             btnCreateVersion.isEnabled =
-                !isExternalFile
+                true
 
             btnVersionHistory.isEnabled =
-                !isExternalFile
+                true
         }
     }
 
@@ -797,7 +946,9 @@ class EditorActivity : AppCompatActivity() {
             isExternalFile &&
             externalFileUri != null
         ) {
-            saveExternalFile()
+            saveExternalFile(
+                showSuccessMessage = true
+            )
             return
         }
 
@@ -854,7 +1005,9 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveExternalFile() {
+    private fun saveExternalFile(
+        showSuccessMessage: Boolean
+    ) {
         val uri =
             externalFileUri
 
@@ -878,7 +1031,7 @@ class EditorActivity : AppCompatActivity() {
             if (outputStream == null) {
                 Toast.makeText(
                     this,
-                    "This file cannot be edited. Use Save As to create a TextEZ copy.",
+                    "This file cannot be edited. Use Save As to create another copy.",
                     Toast.LENGTH_LONG
                 ).show()
 
@@ -898,6 +1051,14 @@ class EditorActivity : AppCompatActivity() {
                     )
                 }
 
+            syncExternalMirror(
+                content
+            )
+
+            addExternalFileToRecent(
+                uri
+            )
+
             lastSavedOrRecoveredContent =
                 content
 
@@ -910,18 +1071,20 @@ class EditorActivity : AppCompatActivity() {
 
             scheduleSyntaxHighlighting()
 
-            Toast.makeText(
-                this,
-                getString(
-                    R.string.file_saved
-                ),
-                Toast.LENGTH_SHORT
-            ).show()
+            if (showSuccessMessage) {
+                Toast.makeText(
+                    this,
+                    getString(
+                        R.string.file_saved
+                    ),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
 
         } catch (exception: Exception) {
             Toast.makeText(
                 this,
-                "This file is read-only or unavailable. Use Save As to create a TextEZ copy.",
+                "This file is read-only or unavailable. Use Save As to create another copy.",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -1066,9 +1229,23 @@ class EditorActivity : AppCompatActivity() {
                     currentFileName
             )
 
-            removeReadOnlyState(
+            File(
+                getTextEZFolder(),
                 currentFileName
+            ).delete()
+
+            val preferences =
+                getSharedPreferences(
+                    RecentFilesManager.PREFERENCES_NAME,
+                    MODE_PRIVATE
+                )
+
+            RecentFilesManager.removeExternalFile(
+                preferences,
+                uri.toString()
             )
+
+            removeCurrentReadOnlyState()
 
             AutoSaveManager.clearRecovery(
                 this
@@ -1098,24 +1275,28 @@ class EditorActivity : AppCompatActivity() {
     ) {
         val preferences =
             getSharedPreferences(
-                RecentFilesManager
-                    .PREFERENCES_NAME,
+                RecentFilesManager.PREFERENCES_NAME,
                 MODE_PRIVATE
             )
 
-        val updatedRecentFiles =
-            RecentFilesManager
-                .getRecentFiles(
-                    preferences
-                )
-                .filterNot {
-                    it == fileName
-                }
-
-        RecentFilesManager.saveRecentFiles(
+        RecentFilesManager.removeInternalFile(
             preferences,
-            updatedRecentFiles
+            fileName
         )
+    }
+
+    private fun removeCurrentReadOnlyState() {
+        val preferences =
+            getSharedPreferences(
+                READ_ONLY_PREFERENCES,
+                MODE_PRIVATE
+            )
+
+        preferences.edit()
+            .remove(
+                readOnlyPreferenceKey()
+            )
+            .apply()
     }
 
     private fun removeReadOnlyState(
@@ -1232,8 +1413,7 @@ class EditorActivity : AppCompatActivity() {
                     Toast.makeText(
                         this,
                         getString(
-                            R.string
-                                .file_name_required
+                            R.string.file_name_required
                         ),
                         Toast.LENGTH_SHORT
                     ).show()
@@ -1250,8 +1430,7 @@ class EditorActivity : AppCompatActivity() {
                     Toast.makeText(
                         this,
                         getString(
-                            R.string
-                                .invalid_file_name
+                            R.string.invalid_file_name
                         ),
                         Toast.LENGTH_SHORT
                     ).show()
@@ -1264,46 +1443,12 @@ class EditorActivity : AppCompatActivity() {
                         safeName
                     )
 
-                val targetFile =
-                    File(
-                        getTextEZFolder(),
-                        finalName
-                    )
+                pendingCreateFileName =
+                    finalName
 
-                if (
-                    targetFile.exists() &&
-                    finalName != currentFileName
-                ) {
-                    showOverwriteConfirmation(
-                        finalName
-                    )
-                } else {
-                    currentFileName =
-                        finalName
-
-                    externalFileUri =
-                        null
-
-                    isExternalFile =
-                        false
-
-                    txtFileName.text =
-                        currentFileName
-
-                    isReadOnly =
-                        false
-
-                    saveReadOnlyState()
-                    updateReadOnlyInterface()
-                    saveCurrentFile()
-
-                    /*
-                     * Re-run highlighting because the
-                     * newly saved extension may identify
-                     * Kotlin or Markdown.
-                     */
-                    scheduleSyntaxHighlighting()
-                }
+                createDocumentLauncher.launch(
+                    finalName
+                )
             }
             .setNegativeButton(
                 getString(
@@ -1337,58 +1482,11 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun showOverwriteConfirmation(
-        fileName: String
-    ) {
-        AlertDialog.Builder(this)
-            .setTitle(
-                getString(
-                    R.string.file_exists
-                )
-            )
-            .setMessage(
-                getString(
-                    R.string.overwrite_message,
-                    fileName
-                )
-            )
-            .setPositiveButton(
-                getString(
-                    R.string.overwrite
-                )
-            ) { _, _ ->
-
-                currentFileName =
-                    fileName
-
-                externalFileUri =
-                    null
-
-                isExternalFile =
-                    false
-
-                txtFileName.text =
-                    currentFileName
-
-                isReadOnly =
-                    false
-
-                saveReadOnlyState()
-                updateReadOnlyInterface()
-                saveCurrentFile()
-                scheduleSyntaxHighlighting()
-            }
-            .setNegativeButton(
-                getString(
-                    R.string.cancel
-                ),
-                null
-            )
-            .show()
-    }
-
     private fun loadCurrentFile() {
         try {
+            externalFileUri = null
+            isExternalFile = false
+
             val file =
                 File(
                     getTextEZFolder(),
@@ -1459,16 +1557,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showCreateVersionDialog() {
-        if (isExternalFile) {
-            Toast.makeText(
-                this,
-                "Use Save As to create a TextEZ copy before creating versions.",
-                Toast.LENGTH_LONG
-            ).show()
-
-            return
-        }
-
         if (
             currentFileName ==
             DEFAULT_FILE_NAME
@@ -1575,16 +1663,6 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun openVersionHistory() {
-        if (isExternalFile) {
-            Toast.makeText(
-                this,
-                "Use Save As to create a TextEZ copy before opening version history.",
-                Toast.LENGTH_LONG
-            ).show()
-
-            return
-        }
-
         if (
             currentFileName ==
             DEFAULT_FILE_NAME
@@ -1627,6 +1705,7 @@ class EditorActivity : AppCompatActivity() {
 
         if (
             isReadOnly ||
+            isExternalFile ||
             !hasUnsavedChanges
         ) {
             return
@@ -1781,36 +1860,13 @@ class EditorActivity : AppCompatActivity() {
     ) {
         val preferences =
             getSharedPreferences(
-                RecentFilesManager
-                    .PREFERENCES_NAME,
+                RecentFilesManager.PREFERENCES_NAME,
                 MODE_PRIVATE
             )
 
-        val currentRecentFiles =
-            RecentFilesManager
-                .getRecentFiles(
-                    preferences
-                )
-                .toMutableList()
-
-        currentRecentFiles.remove(
-            fileName
-        )
-
-        currentRecentFiles.add(
-            0,
-            fileName
-        )
-
-        val limitedFiles =
-            currentRecentFiles.take(
-                RecentFilesManager
-                    .MAX_RECENT_FILES
-            )
-
-        RecentFilesManager.saveRecentFiles(
+        RecentFilesManager.addInternalFile(
             preferences,
-            limitedFiles
+            fileName
         )
     }
 

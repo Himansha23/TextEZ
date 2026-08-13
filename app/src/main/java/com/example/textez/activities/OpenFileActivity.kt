@@ -3,9 +3,9 @@ package com.example.textez.activities
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.example.textez.storage.RecentFilesManager
 
 class OpenFileActivity : AppCompatActivity() {
 
@@ -20,10 +20,13 @@ class OpenFileActivity : AppCompatActivity() {
             }
 
             persistFilePermission(uri)
+            addExternalFileToRecent(uri)
             openSelectedFile(uri)
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
         openDocumentLauncher.launch(
@@ -42,28 +45,103 @@ class OpenFileActivity : AppCompatActivity() {
         )
     }
 
-    private fun persistFilePermission(uri: Uri) {
+    private fun persistFilePermission(
+        uri: Uri
+    ) {
         try {
-            contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
+            contentResolver
+                .takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
         } catch (_: SecurityException) {
             /*
-             Some document providers only grant temporary access.
-             The file may still open normally during this session.
+             * Some providers do not support persistent
+             * permissions. The file can still be used
+             * during the current session.
              */
         }
     }
 
-    private fun openSelectedFile(uri: Uri) {
+    private fun addExternalFileToRecent(
+        uri: Uri
+    ) {
+        val preferences =
+            getSharedPreferences(
+                RecentFilesManager
+                    .PREFERENCES_NAME,
+                MODE_PRIVATE
+            )
+
+        val displayName =
+            getDisplayName(uri)
+
+        RecentFilesManager
+            .addExternalFile(
+                preferences = preferences,
+                displayName = displayName,
+                uriString = uri.toString()
+            )
+    }
+
+    private fun getDisplayName(
+        uri: Uri
+    ): String {
+        var fileName =
+            "ExternalFile.txt"
+
+        contentResolver.query(
+            uri,
+            arrayOf(
+                android.provider
+                    .OpenableColumns
+                    .DISPLAY_NAME
+            ),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+
+            val columnIndex =
+                cursor.getColumnIndex(
+                    android.provider
+                        .OpenableColumns
+                        .DISPLAY_NAME
+                )
+
+            if (
+                columnIndex >= 0 &&
+                cursor.moveToFirst()
+            ) {
+                fileName =
+                    cursor.getString(
+                        columnIndex
+                    ) ?: fileName
+            }
+        }
+
+        return fileName
+    }
+
+    private fun openSelectedFile(
+        uri: Uri
+    ) {
         val intent =
-            Intent(this, EditorActivity::class.java).apply {
-                putExtra(EditorActivity.EXTRA_EXTERNAL_FILE_URI, uri.toString())
+            Intent(
+                this,
+                EditorActivity::class.java
+            ).apply {
+
+                putExtra(
+                    EditorActivity
+                        .EXTRA_EXTERNAL_FILE_URI,
+                    uri.toString()
+                )
             }
 
         startActivity(intent)
+
         finish()
     }
 }

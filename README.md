@@ -183,11 +183,9 @@ main
 
 # Author
 
-**Himansha Wijesekara**
-
-**Sasindi de Silva**
-
-**Shammi Perera**
+**R A H N Wijesekara - 24021202**
+**W S C de Silva - 24020222**
+**H S R Perera - 24020796**
 
 IS2205 – Mobile Application Development
 

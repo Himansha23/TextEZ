@@ -378,8 +378,6 @@ The project technical report describes the implementation of:
 - Version comparison
 - Version rollback
 
-**Technical Report:** Add final report link here
-
 ---
 
 ## Application Demonstration
@@ -388,7 +386,7 @@ A recorded demonstration accompanies the project submission.
 
 All three group members participate in the demonstration and explain the features related to their individual contributions.
 
-**Demonstration Video:** Add final video link here
+**Demonstration Video:** https://drive.google.com/drive/folders/1UuoAsgbjHVo5I3FKY87C_Yqtdc-CljhG?usp=sharing
 
 ---
 

@@ -1,198 +1,409 @@
-# TextEZ – Mobile Text Editor
+# TextEZ
 
-TextEZ is a lightweight Android text editor developed in **Kotlin** as part of the **IS2205 Mobile Application Development Mini Project**.
+<p align="center">
+  <b>Mobile Text Editor with Incremental Version Control</b>
+</p>
 
-The application allows users to create, edit, save, organize, and version-control text documents directly on an Android device. It also supports automatic syntax highlighting for Kotlin and Markdown files, crash recovery, and document version management.
+## Project Information
+
+**University:** University of Colombo School of Computing  
+**Course:** IS2205 – Mobile Application Design and Development  
+**Project Type:** Mini Project  
+**Application:** TextEZ  
+**Platform:** Android  
+**Language:** Kotlin  
+
+TextEZ is a mobile text editor developed for Android. The application provides standard text-editing and file-management functions together with Kotlin and Markdown syntax highlighting, autosave and recovery, read-only protection, and an incremental document version-control mechanism.
+
+The version-control functionality is implemented inside the TextEZ application and allows users to create, preview, compare, and restore previous versions of a document.
 
 ---
 
-## Features
+## Group Members
+
+| Student | Student ID |
+|---|---|
+| RAHN Wijesekara | 24021202 |
+| WSC de Silva | 24020222 |
+| HSR Perera | 24020796 |
+
+---
+
+## Main Features
 
 ### File Management
-- Create new text files
-- Open existing files
-- Save files
-- Save As
-- Delete files
-- Recent Files list
+
+- Create new text documents
+- Open existing documents from Android storage
+- Save documents
+- Save As support
+- Delete documents
+- Recent file management
+- UTF-8 file handling
+- Android Storage Access Framework integration
 
 ### Text Editing
+
+- Multi-line text editing
 - Undo
 - Redo
 - Search
-- Replace
+- Replace One
+- Replace All
+- Line count
+- Character count
+- Read-only mode
 
-### Smart Editor
-- Automatic Kotlin syntax highlighting
-- Automatic Markdown syntax highlighting
-- Automatic language detection while typing
-- Plain text editing
-- Read Only mode
+### Syntax Highlighting
 
-### Data Protection
-- Auto Save
-- Crash Recovery
-- UTF-8 file support
+TextEZ supports syntax highlighting for:
 
-### Version Control
-- Create document versions
-- View Version History
-- Preview previous versions
-- Compare versions
-- Restore previous versions
+- Kotlin (`.kt`)
+- Markdown (`.md`)
+
+The application can also detect Kotlin and Markdown content while the user is typing an unsaved document.
+
+### Autosave and Recovery
+
+TextEZ provides a recovery mechanism for unsaved work.
+
+When a document contains unsaved changes, recovery information is periodically stored in the application cache. If unsaved recovery data is detected when TextEZ is opened again, the user can choose to:
+
+- Restore the unsaved content
+- Discard the recovery data
+
+### Incremental Version Control
+
+TextEZ includes an in-app document version-control system.
+
+The first version of a document is stored as a complete **base version**. Subsequent versions are stored as **delta patches** rather than complete duplicate documents.
+
+```text
+Version 1 -> Base Snapshot
+Version 2 -> Delta Patch
+Version 3 -> Delta Patch
+Version 4 -> Delta Patch
+```
+
+The version-control system supports:
+
+- Named document versions
+- Version numbering
+- Version timestamps
+- Base and delta storage
+- Version history
+- Version reconstruction
+- Version preview
+- Line-based comparison
+- Rollback to previous versions
 - Automatic backup before rollback
-- Delta storage using **java-diff-utils**
 
-### Version Control System
-- Git
-- GitHub Repository
-- Feature Branch workflow
-- Release Tags
+TextEZ uses `java-diff-utils` to generate and apply unified line-based patches.
 
 ---
 
-# Technologies Used
+## Version Comparison
+
+TextEZ can compare a selected historical version with the current document.
+
+The comparison output uses the following notation:
+
+```diff
+  Unchanged line
+- Removed line
++ Added line
+```
+
+This allows users to identify document changes without manually comparing complete files.
+
+---
+
+## Document Version Reconstruction
+
+Delta versions are reconstructed by starting with the base version and sequentially applying the required patches.
+
+```text
+Base Version
+     |
+     v
+Apply Delta 2
+     |
+     v
+Apply Delta 3
+     |
+     v
+Reconstructed Version
+```
+
+This approach reduces unnecessary duplication while maintaining access to previous document states.
+
+---
+
+## Storage Architecture
+
+TextEZ uses several Android storage mechanisms for different purposes.
+
+### User Documents
+
+User documents are accessed using the Android Storage Access Framework and `ContentResolver`.
+
+This allows users to create and open documents through Android's system document interface.
+
+### Version Storage
+
+Document version information is maintained separately by TextEZ.
+
+Version storage contains:
+
+- Base snapshot files
+- Delta patch files
+- Version metadata
+
+### Recovery Storage
+
+Temporary recovery information is stored in the application's cache.
+
+### SharedPreferences
+
+SharedPreferences are used for lightweight application state such as:
+
+- Recent file references
+- Read-only document state
+
+---
+
+## Project Structure
+
+The main project components are organized approximately as follows:
+
+```text
+com.example.textez
+|
++-- activities
+|   +-- MainActivity
+|   +-- EditorActivity
+|   +-- OpenFileActivity
+|   +-- VersionHistoryActivity
+|
++-- adapters
+|   +-- VersionAdapter
+|
++-- managers
+|   +-- LanguageDetector
+|   +-- KotlinSyntaxHighlighter
+|   +-- MarkdownSyntaxHighlighter
+|   +-- LineDiffManager
+|   +-- VersionManager
+|
++-- models
+|   +-- Version
+|
++-- storage
+    +-- AutoSaveManager
+    +-- RecentFilesManager
+```
+
+---
+
+## Technologies Used
 
 - Kotlin
 - Android SDK
 - Android Studio
-- Gradle
+- XML layouts
+- AndroidX
+- Material Components
+- RecyclerView
 - SharedPreferences
-- Internal Storage
-- java-diff-utils
-- Git
-- GitHub
+- Android Storage Access Framework
+- `java-diff-utils`
+- Gradle
 
----
+### Android Configuration
 
-# Project Structure
-
-```
-TextEZ
-│
-├── activities
-│   ├── MainActivity
-│   ├── EditorActivity
-│   ├── OpenFileActivity
-│   ├── VersionHistoryActivity
-│   ├── VersionPreviewActivity
-│   └── VersionCompareActivity
-│
-├── adapters
-│
-├── managers
-│   ├── LanguageDetector
-│   ├── KotlinSyntaxHighlighter
-│   ├── MarkdownSyntaxHighlighter
-│   ├── LineDiffManager
-│   └── VersionManager
-│
-├── storage
-│   ├── AutoSaveManager
-│   └── RecentFilesManager
-│
-├── models
-│   └── Version
-│
-└── res
+```text
+minSdk: 24
+targetSdk: 36
+compileSdk: 37
+Java compatibility: Java 11
 ```
 
 ---
 
-# Installation
+## Application Workflow
 
-Clone the repository
+```text
+                TextEZ
+                   |
+          +--------+--------+
+          |                 |
+      New File          Open File
+          |                 |
+          +--------+--------+
+                   |
+                Editor
+                   |
+     +-------------+-------------+
+     |             |             |
+ File Editing    Syntax       Version
+ Operations    Highlighting    Control
+     |             |             |
+ Save/Open     Kotlin/MD     Base + Delta
+ Search        Detection     Compare
+ Replace       Highlight     Restore
+ Undo/Redo                  Version History
+```
+
+---
+
+## APK
+
+The compiled TextEZ Android application is available in the repository:
+
+```text
+apk/TextEZ-v1.0.apk
+```
+
+### Installation
+
+1. Download `TextEZ-v1.0.apk`.
+2. Transfer it to an Android device if necessary.
+3. Allow installation from the selected source if Android requests permission.
+4. Open the APK.
+5. Install TextEZ.
+
+> The APK was generated from the Android project for project demonstration and assessment purposes.
+
+---
+
+## Build from Source
+
+### Requirements
+
+- Android Studio
+- Android SDK
+- JDK compatible with the project configuration
+
+### Steps
+
+1. Clone the repository:
 
 ```bash
 git clone https://github.com/Himansha23/TextEZ.git
 ```
 
-Open the project using **Android Studio**.
+2. Open the cloned project in Android Studio.
 
-Build the project.
+3. Allow Gradle to synchronize the project dependencies.
 
-Run the application on:
+4. Select an Android emulator or connected Android device.
 
-- Android Emulator
-- Physical Android Device (Android 7.0+)
+5. Build and run the application.
 
----
+A debug APK can also be generated using:
 
-# How to Use
-
-### Create File
-
-- Tap **New File**
-- Start typing
-
-### Save
-
-- Press **Save**
-- Enter file name
-
-### Search
-
-- Tap **Search**
-- Enter keyword
-
-### Replace
-
-- Tap **Replace**
-- Replace one or all occurrences
-
-### Version Control
-
-- Press **Create Version**
-- View **History**
-- Preview
-- Compare
-- Restore
-
-### Delete File
-
-- Press **Delete**
-- Confirm deletion
-
----
-
-# Version Control Workflow
-
+```bash
+./gradlew assembleDebug
 ```
-main
-│
-├── feature/editor
-├── feature/search
-├── feature/version-control
-└── release/v2.1
+
+The generated APK is normally available at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-# Future Improvements
+## Team Contributions
 
-- Dark Mode
-- Line Numbers
-- Multiple Tabs
-- Code Folding
-- Themes
-- Export as PDF
-- Cloud Synchronization
-- Plugin Support
+### HSR Perera – 24020796
+
+**Core Editor and File Management**
+
+Main implementation areas:
+
+- New File
+- Open File
+- Save
+- Save As
+- Delete
+- Undo
+- Redo
+- Search
+- Replace
+
+### WSC de Silva – 24020222
+
+**Syntax Highlighting and Recovery**
+
+Main implementation areas:
+
+- Kotlin syntax highlighting
+- Markdown syntax highlighting
+- Automatic language detection
+- Autosave
+- Unsaved-work recovery
+
+### RAHN Wijesekara – 24021202
+
+**Incremental Version Control**
+
+Main implementation areas:
+
+- Version creation
+- Base version storage
+- Delta tracking
+- Patch generation
+- Version reconstruction
+- Version history
+- Version preview
+- Version comparison
+- Rollback
+
+Integration and final application testing were carried out collaboratively by the group.
 
 ---
 
-# Author
+## Technical Documentation
 
-**R A H N Wijesekara - 24021202**
-**W S C de Silva - 24020222**
-**H S R Perera - 24020796**
+The project technical report describes the implementation of:
 
-IS2205 – Mobile Application Development
+- File and document storage
+- Syntax highlighting
+- Autosave and recovery
+- Incremental delta tracking
+- Version storage
+- Version reconstruction
+- Version preview
+- Version comparison
+- Version rollback
 
-University of Colombo School of Computing
+**Technical Report:** Add final report link here
 
 ---
 
-# License
+## Application Demonstration
 
-This project was developed for educational purposes as part of the IS2205 Mobile Application Development Mini Project.
+A recorded demonstration accompanies the project submission.
+
+All three group members participate in the demonstration and explain the features related to their individual contributions.
+
+**Demonstration Video:** Add final video link here
+
+---
+
+## Repository
+
+**GitHub Repository:**  
+https://github.com/Himansha23/TextEZ
+
+---
+
+## Academic Project
+
+TextEZ was developed as a group mini project for:
+
+**IS2205 – Mobile Application Design and Development**  
+**University of Colombo School of Computing**
+
+The application was developed for academic assessment and demonstration purposes.
